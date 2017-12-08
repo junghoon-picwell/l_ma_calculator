@@ -1,3 +1,2 @@
-boto3
 ConfigParser
--e git+ssh://git@github.com/picwell/misscleo.git@28cf01c802552b20fe7d538426c5f3b17e10c609#egg=misscleo
+../misscleo
