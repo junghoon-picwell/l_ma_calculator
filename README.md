@@ -20,11 +20,7 @@ To package this for use as a lambda, run `make package`.
 
 
 ```
-usage: ma_calculator.py 
-
-
-positional arguments:
-  creds_file  credsfile containing 1 JSobj of `email` & `password`
+usage: ma_calculator_wrapper.py 
 
 optional arguments:
   -h, --help  show this help message and exit

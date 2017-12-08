@@ -22,6 +22,8 @@ package : clean
 	pip install -r requirements.txt
 	zip $(OUTPUT) *.py
 	cd $(VIRTUAL_ENV)/lib/python2.7/site-packages && zip -r9 $(OUTPUT) ./* && cd $(HERE)
+	cd $(VIRTUAL_ENV)/src/misscleo && zip -r9 $(OUTPUT) ./*
+	#cd $(VIRTUAL_ENV)/src/etl && zip -r9 $(OUTPUT) ./*
 
 
 clean :

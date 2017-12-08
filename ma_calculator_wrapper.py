@@ -3,13 +3,12 @@ from __future__ import print_function
 import json
 import logging
 import time
-import boto3
+
 from datetime import timedelta
 from s3_helpers import read_json
 from config_info import ConfigInfo
 from misscleo.costmap import DynamoDBCostMap
-
-from ma.calculator.ma_calculator.calculator import calculate_oop
+from calc.calculator import calculate_oop
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig()
@@ -18,17 +17,20 @@ CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 CONFIG_FILE_NAME = 'calculator.cfg'
 
+
 def _succeed_with_message(message):
     return {
         'statusCode': 200,
         'message': message
     }
 
+
 def _fail_with_message(message):
     return {
         'statusCode': 500,
         'message': message
     }
+
 
 def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_map):
     claims = person.get('medical_claims', [])
@@ -58,6 +60,7 @@ def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_
     # Write to cost map:
     cost_map.add_items(cost_items)
 
+
 def respond(err, res=None):
     return {
         'statusCode': '400' if err else '200',
@@ -66,6 +69,7 @@ def respond(err, res=None):
             'Content-Type': 'application/json',
         },
     }
+
 
 def main(run_options, aws_options):
     start = time.clock()
@@ -148,7 +152,6 @@ def lambda_handler(event, context):
 
     else:
         return respond(ValueError('Unsupported method "{}"'.format(operation)))
-
 
 
 if __name__ == '__main__':
