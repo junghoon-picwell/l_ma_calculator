@@ -10,3 +10,4 @@ class ConfigInfo(object):
         self.claims_bucket = config_parser.get('aws', 'CLAIMS_BUCKET_NAME')
         self.benefit_bucket = config_parser.get('aws', 'BENEFITS_BUCKET_NAME')
         self.dynamo_db_table = config_parser.get('aws', 'DYNAMODB_TABLE_NAME')
+        self.claims_year = config_parser.get('claims', 'CLAIMS_YEAR')

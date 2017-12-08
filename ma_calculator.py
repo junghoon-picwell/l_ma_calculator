@@ -2,9 +2,9 @@
 from __future__ import print_function
 import json
 import logging
-import ConfigParser
-
+import time
 import boto3
+from datetime import timedelta
 from s3_helpers import read_json
 from config_info import ConfigInfo
 from misscleo.costmap import DynamoDBCostMap
@@ -14,10 +14,21 @@ from ma.calculator.ma_calculator.calculator import calculate_oop
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig()
 
-WK_FOLDER = 'wolterskluwer'
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 CONFIG_FILE_NAME = 'calculator.cfg'
+
+def _succeed_with_message(message):
+    return {
+        'statusCode': 200,
+        'message': message
+    }
+
+def _fail_with_message(message):
+    return {
+        'statusCode': 500,
+        'message': message
+    }
 
 def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_map):
     claims = person.get('medical_claims', [])
@@ -45,7 +56,6 @@ def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_
         })
 
     # Write to cost map:
-    # TODO: consider failing more gracefully with some logging?
     cost_map.add_items(cost_items)
 
 def respond(err, res=None):
@@ -58,6 +68,7 @@ def respond(err, res=None):
     }
 
 def main(run_options, aws_options):
+    start = time.clock()
     config_values = ConfigInfo(CONFIG_FILE_NAME)
 
     if not run_options.has_key('uid'):
@@ -74,7 +85,10 @@ def main(run_options, aws_options):
     file_name = CLAIMS_PATH + '/{}.json'.format(user_id)
     user_data = read_json(config_values.claims_bucket, file_name)
 
-    person = user_data
+    if len(user_data) == 0:
+        return _fail_with_message('no user data located at {}/{}'.format(config_values.claims_bucket, file_name))
+
+    person = user_data[0]
 
     # look up plans from s3
     plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
@@ -87,9 +101,13 @@ def main(run_options, aws_options):
         run_options['fips'] = set(run_options['fips'])
 
     for fips in run_options['fips']:
-        plans = filter(lambda plan: plan['state_fips'] == fips, fips)
-        if plans:
-            _calculate_for_all_plans(person, plans, '2018', fips, months, cost_map)
+        plans_for_state = filter(lambda plan: plan['state_fips'] == fips, plans)
+
+        if plans_for_state:
+            _calculate_for_all_plans(person, plans_for_state, config_values.claims_year, fips, months, cost_map)
+
+    end = time.clock() - start
+    return _succeed_with_message('calculation complete: {}'.format(timedelta(seconds=end)))
 
 
 def lambda_handler(event, context):
