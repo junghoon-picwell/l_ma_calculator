@@ -1,11 +1,29 @@
-HERE=`pwd`
-LIB_DIR="$(HERE)/lib"
-OUTPUT="$(HERE)/l_ma_calculator.zip"
+.ONESHELL:
+
+VERSION_FILE := VERSION
+HERE := $(shell pwd)
+VSN := $(shell cat ${VERSION_FILE})
+OUTPUT := $(HERE)/build/l_ma_calculator-$(VSN).zip
+PROJ_DIR := $(HERE)
 
 # http://docs.aws.amazon.com/lambda/latest/dg/lambda-python-how-to-create-deployment-package.html
+# And:
+# http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python
+ver :
+	ECHO $(VSN)
+
+	ECHO $(OUTPUT)
+
+	ECHO $(VIRTUAL_ENV)
+
 package : clean
-	pip install -r requirements.txt -t $(LIB_DIR)
-	zip $(OUTPUT) *.py $(LIB_DIR)/*
+	ECHO $(HERE)
+	ECHO $(OUTPUT)
+	pip install -r requirements.txt
+	zip $(OUTPUT) *.py
+	cd $(VIRTUAL_ENV)/lib/python2.7/site-packages && zip -r9 $(OUTPUT) ./* && cd $(HERE)
+
 
 clean :
-	[ -d $(LIB_DIR) ] && rm -rf $(LIB_DIR) && (rm $(OUTPUT) || true) || true
+	[ -d $(LIB_DIR) ] && rm -rf $(LIB_DIR) && (rm $(PROJ_DIR)/build/* || true) || true
+

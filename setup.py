@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-import subprocess
+from version import get_version_number
 
-version='1.0.0'
+version=get_version_number()
 
 setup(
     name='lambda_ma_calculator',
