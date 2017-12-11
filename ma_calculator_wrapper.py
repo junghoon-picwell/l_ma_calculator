@@ -2,6 +2,7 @@
 from __future__ import print_function
 import json
 import logging
+from benefits_2018 import MA_PLANS
 import time
 
 from datetime import timedelta, datetime
@@ -117,7 +118,8 @@ def main(run_options, aws_options):
     # look up plans from s3
     logger.info('Retrieving benefits file...')
     benefit_file_time = datetime.now()
-    plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
+    #plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
+    plans = MA_PLANS
     logger.info(
         'Finished retrieving benefits file in {} seconds.'.format((datetime.now() - benefit_file_time).total_seconds()))
 
