@@ -173,7 +173,7 @@ def lambda_handler(event, context):
         if res['statusCode'] != '200':
             return respond(ValueError(res['message']), res['message'])
 
-        return respond(None, res)
+        return respond(None, res['message'])
 
     else:
         return respond(ValueError('Unsupported method "{}"'.format(operation)))
