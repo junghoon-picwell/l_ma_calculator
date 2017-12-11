@@ -7,11 +7,7 @@ from ma_calculator_wrapper import main
 
 
 def _get_boto_client():
-    return boto3.client('lambda',
-                        aws_access_key_id='',
-                        aws_secret_access_key='',
-                        region_name=''
-                        )
+    return boto3.client('lambda')
 
 
 def test_for_user_ids():
@@ -20,13 +16,13 @@ def test_for_user_ids():
     request = {
         "httpMethod": "GET",
         "queryStringParameters": {
-            "uid": "1175404001"
+            "uid": "1009901"
         }
     }
 
     response = client.invoke(
         FunctionName='ma_calculator',
-        InvocationType='Event',  # "Event" makes this async. Other options are 'RequestResponse' | 'DryRun'
+        InvocationType='RequestResponse',  # "Event" makes this async. Options are 'Event' | 'RequestResponse' | 'DryRun'
         LogType='None',  # Only used if InvocationType is 'RequestResponse'.  If so, you can set this to 'Tail'
         ClientContext='Test Client',  # not needed
         Payload=bytes(json.dumps(request)),
