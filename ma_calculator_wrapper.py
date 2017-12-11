@@ -10,24 +10,31 @@ from config_info import ConfigInfo
 from cost_map import DynamoDBCostMap
 from calc.calculator import calculate_oop
 
-logging.getLogger().setLevel(logging.DEBUG)
-logging.basicConfig()
-
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 CONFIG_FILE_NAME = 'calculator.cfg'
 
 
+def respond(err, res=None):
+    return {
+        'statusCode': '400' if err else '200',
+        'body': err.message if err else json.dumps(res),
+        'headers': {
+            'Content-Type': 'application/json',
+        },
+    }
+
+
 def _succeed_with_message(message):
     return {
-        'statusCode': 200,
+        'statusCode': '200',
         'message': message
     }
 
 
 def _fail_with_message(message):
     return {
-        'statusCode': 500,
+        'statusCode': '500',
         'message': message
     }
 
@@ -61,17 +68,11 @@ def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_
     cost_map.add_items(cost_items)
 
 
-def respond(err, res=None):
-    return {
-        'statusCode': '400' if err else '200',
-        'body': err.message if err else json.dumps(res),
-        'headers': {
-            'Content-Type': 'application/json',
-        },
-    }
-
-
 def main(run_options, aws_options):
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logging.basicConfig()
+
     start = time.clock()
     config_values = ConfigInfo(CONFIG_FILE_NAME)
 
@@ -85,17 +86,22 @@ def main(run_options, aws_options):
 
     cost_map = DynamoDBCostMap(table_name=config_values.dynamo_db_table, aws_options=aws_options)
 
-    # look up plans from s3
-    plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
-
     # look up claims from s3 for user
+    logger.info('Retrieving claims for {}'.format(user_id))
     file_name = CLAIMS_PATH + '/{}.json'.format(user_id)
     user_data = read_json(config_values.claims_bucket, file_name)
 
     if len(user_data) == 0:
-        return _fail_with_message('no user data located at {}/{}'.format(config_values.claims_bucket, file_name))
+        missing_user_message = 'No user data located at {}/{}'.format(config_values.claims_bucket, file_name)
+        logger.error(missing_user_message)
+        return _fail_with_message(missing_user_message)
 
     person = user_data[0]
+
+    # look up plans from s3
+    logger.info('Retrieving benefits file')
+    plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
+    logger.info('Finished retrieving benefits file')
 
     # get FIPS for plans
 
@@ -104,6 +110,7 @@ def main(run_options, aws_options):
     else:
         fips = set(run_options['fips'])
 
+    logger.info('Start calculation for all states:')
     for single_state in fips:
         plans_for_state = filter(lambda plan: plan['state_fips'] == single_state, plans)
 
@@ -111,7 +118,9 @@ def main(run_options, aws_options):
             _calculate_for_all_plans(person, plans_for_state, config_values.claims_year, single_state, months, cost_map)
 
     end = time.clock() - start
-    return _succeed_with_message('calculation complete: {}'.format(timedelta(seconds=end)))
+    elapsed = timedelta(seconds=end)
+    logger.info('Finished calculation for all states. Elapsed: {}'.format(elapsed))
+    return _succeed_with_message('calculation complete: {}'.format(elapsed))
 
 
 def lambda_handler(event, context):
