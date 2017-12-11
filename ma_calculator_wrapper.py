@@ -80,7 +80,7 @@ def main(run_options, aws_options):
         return {
             'message': 'missing "uid"',
         }
-    months = ['01']
+    months = run_options['months']
 
     user_id = run_options['uid']
 
@@ -139,7 +139,7 @@ def lambda_handler(event, context):
         'region_name': 'us-east-1',
     }
     run_options = {}
-
+    default_months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
     operations = {
         'GET': lambda: main(run_options, aws_options)
     }
@@ -150,6 +150,7 @@ def lambda_handler(event, context):
         payload = event['queryStringParameters'] if operation == 'GET' else json.loads(event['body'])
         run_options['uid'] = payload['uid']
         run_options['fips'] = payload.get('states', [])
+        run_options['months'] = payload.get('months', default_months)
         res = operations[operation]()
         if res['statusCode'] != '200':
             return respond(ValueError(res['message']), res['message'])
