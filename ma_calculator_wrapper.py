@@ -4,7 +4,7 @@ import json
 import logging
 import time
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from s3_helpers import read_json
 from config_info import ConfigInfo
 from cost_map import DynamoDBCostMap
@@ -13,6 +13,9 @@ from calc.calculator import calculate_oop
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 CONFIG_FILE_NAME = 'calculator.cfg'
+
+logger = logging.getLogger()
+logging.basicConfig()
 
 
 def respond(err, res=None):
@@ -68,13 +71,23 @@ def _calculate_for_all_plans(person, plans, claim_year, fips_code, months, cost_
     cost_map.add_items(cost_items)
 
 
-def main(run_options, aws_options):
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    logging.basicConfig()
+def _configure_logging(logger, log_level):
+    if log_level == 'DEBUG':
+        logger.setLevel(logging.DEBUG)
+    elif log_level == 'INFO':
+        logger.setLevel(logging.INFO)
+    elif log_level == 'WARNING':
+        logger.setLevel(logging.WARNING)
+    else:
+        logger.setLevel(logging.ERROR)
 
-    start = time.clock()
+
+def main(run_options, aws_options):
     config_values = ConfigInfo(CONFIG_FILE_NAME)
+    _configure_logging(logger, config_values.log_level)
+
+    start_datetime_now = datetime.now()
+    logger.info('Clock started at {}'.format(str(start_datetime_now)))
 
     if not run_options.has_key('uid'):
         return {
@@ -87,9 +100,12 @@ def main(run_options, aws_options):
     cost_map = DynamoDBCostMap(table_name=config_values.dynamo_db_table, aws_options=aws_options)
 
     # look up claims from s3 for user
-    logger.info('Retrieving claims for {}'.format(user_id))
+    logger.info('Retrieving claims for {}...'.format(user_id))
+    claim_time = datetime.now()
     file_name = CLAIMS_PATH + '/{}.json'.format(user_id)
     user_data = read_json(config_values.claims_bucket, file_name)
+    logger.info('Finished retrieving claims for {} in {} seconds.'.format(user_id, (
+            datetime.now() - claim_time).total_seconds()))
 
     if len(user_data) == 0:
         missing_user_message = 'No user data located at {}/{}'.format(config_values.claims_bucket, file_name)
@@ -99,9 +115,11 @@ def main(run_options, aws_options):
     person = user_data[0]
 
     # look up plans from s3
-    logger.info('Retrieving benefits file')
+    logger.info('Retrieving benefits file...')
+    benefit_file_time = datetime.now()
     plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
-    logger.info('Finished retrieving benefits file')
+    logger.info(
+        'Finished retrieving benefits file in {} seconds.'.format((datetime.now() - benefit_file_time).total_seconds()))
 
     # get FIPS for plans
 
@@ -117,9 +135,9 @@ def main(run_options, aws_options):
         if plans_for_state:
             _calculate_for_all_plans(person, plans_for_state, config_values.claims_year, single_state, months, cost_map)
 
-    end = time.clock() - start
-    elapsed = timedelta(seconds=end)
-    logger.info('Finished calculation for all states. Elapsed: {}'.format(elapsed))
+    end_datetime_now = datetime.now()
+    elapsed = (end_datetime_now - start_datetime_now).total_seconds
+    logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_datetime_now), str(elapsed)))
     return _succeed_with_message('calculation complete: {}'.format(elapsed))
 
 
