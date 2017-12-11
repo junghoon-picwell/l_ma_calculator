@@ -16,10 +16,9 @@ ver :
 
 package : clean
 	pip install -r requirements.txt -t $(LIB_DIR)
-	pip install ../misscleo -t $(LIB_DIR)
-	zip $(OUTPUT) calc/*.py
-	zip $(OUTPUT) calc/benefit_period/*.py
-	zip $(OUTPUT) *.py $(LIB_DIR)/*
+	#pip install ../misscleo -t $(LIB_DIR)
+	zip -r $(OUTPUT) . -i \*.py
+	zip -r $(OUTPUT) . -i \*.cfg
 
 clean :
 	[ -d $(LIB_DIR) ] && rm -rf $(LIB_DIR) && (rm -rf $(HERE)/build/* || true) || true

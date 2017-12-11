@@ -7,7 +7,7 @@ import time
 from datetime import timedelta
 from s3_helpers import read_json
 from config_info import ConfigInfo
-from misscleo.costmap import DynamoDBCostMap
+from cost_map import DynamoDBCostMap
 from calc.calculator import calculate_oop
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -85,6 +85,9 @@ def main(run_options, aws_options):
 
     cost_map = DynamoDBCostMap(table_name=config_values.dynamo_db_table, aws_options=aws_options)
 
+    # look up plans from s3
+    plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
+
     # look up claims from s3 for user
     file_name = CLAIMS_PATH + '/{}.json'.format(user_id)
     user_data = read_json(config_values.claims_bucket, file_name)
@@ -94,21 +97,18 @@ def main(run_options, aws_options):
 
     person = user_data[0]
 
-    # look up plans from s3
-    plans = read_json(config_values.benefit_bucket, BENEFITS_PATH)
-
     # get FIPS for plans
 
-    if not run_options.has_key('fips'):
-        run_options['fips'] = {plan['state_fips'] for plan in plans}
+    if 'fips' not in run_options or len(run_options['fips']) == 0:
+        fips = {plan['state_fips'] for plan in plans}
     else:
-        run_options['fips'] = set(run_options['fips'])
+        fips = set(run_options['fips'])
 
-    for fips in run_options['fips']:
-        plans_for_state = filter(lambda plan: plan['state_fips'] == fips, plans)
+    for single_state in fips:
+        plans_for_state = filter(lambda plan: plan['state_fips'] == single_state, plans)
 
         if plans_for_state:
-            _calculate_for_all_plans(person, plans_for_state, config_values.claims_year, fips, months, cost_map)
+            _calculate_for_all_plans(person, plans_for_state, config_values.claims_year, single_state, months, cost_map)
 
     end = time.clock() - start
     return _succeed_with_message('calculation complete: {}'.format(timedelta(seconds=end)))
@@ -127,15 +127,12 @@ def lambda_handler(event, context):
     :return: HTTP Response based on success/failure of operation
     """
     aws_options = {
-        'aws_access_key_id': '',
-        'aws_secret_access_key': '',
-        'region_name': None,
-        'profile_name': None,
+        'region_name': 'us-east-1',
     }
     run_options = {}
 
     operations = {
-        'GET': main(run_options, aws_options)
+        'GET': lambda: main(run_options, aws_options)
     }
 
     operation = event['httpMethod']
@@ -143,8 +140,8 @@ def lambda_handler(event, context):
     if operation in operations:
         payload = event['queryStringParameters'] if operation == 'GET' else json.loads(event['body'])
         run_options['uid'] = payload['uid']
-        run_options['fips'] = payload['states']
-        res = operation[operation]()
+        run_options['fips'] = payload.get('states', [])
+        res = operations[operation]()
         if res['statusCode'] != '200':
             return respond(ValueError(res['message']), res['message'])
 
@@ -170,7 +167,7 @@ if __name__ == '__main__':
         'profile_name': None
     }
     run_options = {
-        'fips': ['01'],
+        'fips': [],
         'uid': '764308502'
     }
 

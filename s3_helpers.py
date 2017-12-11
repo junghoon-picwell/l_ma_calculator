@@ -14,9 +14,10 @@ def _json_from_s3(s3_bucket, s3_path):
 
     content_object = client.Object(s3_bucket, s3_path)
 
-    file_content = content_object.get()['Body'].read().decode('utf-8')
+    file_content = content_object.get()
+    decoded_body = file_content['Body'].read().decode('utf-8')
 
-    return file_content
+    return decoded_body
 
 def read_json(s3_bucket, s3_path):
     lines_from_s3 = _json_from_s3(s3_bucket, s3_path)
