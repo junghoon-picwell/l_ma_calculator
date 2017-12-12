@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 
-import boto3
 import json
 import logging
 from datetime import datetime
 
+from batch_api import run_batch
 from benefits_2018 import MA_PLANS  # see _read_benefits_from_dict()
-from calc.calculator import calculate_oop
 from config_info import ConfigInfo
-from cost_map import DynamoDBCostMap
-from s3_helpers import read_json
+from detailed_api import run_detailed
+from utils import (
+    fail_with_message,
+    read_claims_from_s3,
+    read_claims_from_dynamodb,
+    read_benefits_from_s3,
+)
 
-CLAIMS_PATH = 'junghoon/lambda_calculator'
-BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 CONFIG_FILE_NAME = 'calculator.cfg'
 
 logger = logging.getLogger()
@@ -30,20 +32,6 @@ def respond(err, res=None):
     }
 
 
-def _succeed_with_message(message):
-    return {
-        'statusCode': '200',
-        'message': message
-    }
-
-
-def _fail_with_message(message):
-    return {
-        'statusCode': '500',
-        'message': message
-    }
-
-
 def _configure_logging(logger, log_level):
     if log_level == 'DEBUG':
         logger.setLevel(logging.DEBUG)
@@ -55,120 +43,9 @@ def _configure_logging(logger, log_level):
         logger.setLevel(logging.ERROR)
 
 
-def _read_claims_from_s3(uid, s3_bucket, aws_options):
-    file_name = CLAIMS_PATH + '/{}.json'.format(uid)
-    user_data = read_json(s3_bucket, file_name, aws_options)
-
-    if not user_data:
-        message = 'No user data located at {}/{}'.format(s3_bucket, file_name)
-        raise Exception(message)
-
-    return user_data[0]
-
-
-def _read_claims_from_dynamodb(uid, table_name, aws_options):
-    session = boto3.Session(**aws_options)
-    resource = session.resource('dynamodb')
-    table = resource.Table(table_name)
-
-    res = table.get_item(Key={'uid': uid},
-                         ConsistentRead=False)
-    if 'Item' not in res or not res['Item']:  # not sure exactly what happens
-        message = 'No user data located in {} table'.format(table_name)
-        raise Exception(message)
-
-    return res['Item']
-
-
-def _read_benefits_from_s3(s3_bucket, aws_options):
-    return read_json(s3_bucket, BENEFITS_PATH, aws_options)
-
-
 def _read_benefits_from_dict():
     # from benefits_2018 import MA_PLANS  # importing here is much slower
     return MA_PLANS
-    
-
-def _filter_and_sort_claims(claims, claim_year, start_month):
-    start_date = '{}-{}-01'.format(claim_year, start_month)
-    end_date = '{}-12-31'.format(claim_year)
-
-    # Used to use Admitted, but `calculate_oop__proration()` (which used to be called by
-    # the spark calculator) uses `discharged`, so using `discharged` for consistency.
-    filtered_claims = [claim for claim in claims if start_date <= claim['discharged'] <= end_date]
-
-    # TODO: should we short claims by admitted????
-    # return sorted(filtered_claims, key=lambda claim: claim['admitted'])
-
-    return filtered_claims
-
-
-def _calculate_batch(person, plans, claim_year, fips_code, months, cost_map):
-    claims = person.get('medical_claims', [])
-
-    cost_items = []
-    for start_month in (str(month).zfill(2) for month in months):
-        claims_to_process = _filter_and_sort_claims(claims, claim_year, start_month)
-
-        oops = {}
-        for plan in plans:
-            costs = calculate_oop(claims_to_process, plan, force_network='in_network',
-                                  truncate_claims_at_year_boundary=False)
-            oops[str(plan['picwell_id'])] = costs['oop']
-
-        cost_items.append({
-            'month': start_month,
-            'uid': person['uid'],
-            'state': fips_code,
-            'oops': oops
-        })
-
-    # Write to cost map:
-    cost_map.add_items(cost_items)
-
-
-def _run_batch(person, plans, claim_year, run_options, table_name, aws_options, start_time):
-    cost_map = DynamoDBCostMap(table_name=table_name, aws_options=aws_options)
-
-    # Read states and propration periods to consider. If not given use default values (all
-    # states among the plans and all proration periods, respectively).
-    months = run_options.get('months',
-                             [str(month + 1).zfill(2) for month in range(12)])
-    states = set(run_options.get('states',
-                                 (plan['state_fips'] for plan in plans)))
-
-    setup_elapsed = (datetime.now() - start_time).total_seconds()
-    logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
-                'Start calculation for batch processing:')
-
-    for state in states:
-        plans_for_state = filter(lambda plan: plan['state_fips'] == state, plans)
-
-        if plans_for_state:
-            _calculate_batch(person, plans_for_state, claim_year, state, months, cost_map)
-
-    end_time = datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
-    logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_time), str(elapsed)))
-
-    return _succeed_with_message('batch calculation complete: {}'.format(elapsed))
-
-
-def _calculate_detail(person, plans, claim_year, month):
-    claims = person.get('medical_claims', [])
-    claims_to_process = _filter_and_sort_claims(claims, claim_year, month)
-
-    costs = []
-    for plan in plans:
-        cost = calculate_oop(claims_to_process, plan, force_network='in_network',
-                             truncate_claims_at_year_boundary=False)
-
-        cost['uid'] = person['uid']
-        cost['picwell_id'] = plan['picwell_id']
-
-        costs.append(cost)
-
-    return costs
 
 
 def main(run_options, aws_options):
@@ -191,13 +68,13 @@ def main(run_options, aws_options):
 
     try:
         if config_values.use_s3_for_claims:
-            person = _read_claims_from_s3(uid, config_values.claims_bucket, aws_options)
+            person = read_claims_from_s3(uid, config_values.claims_bucket, aws_options)
         else:
-            person = _read_claims_from_dynamodb(uid, config_values.dynamodb_claim_table,
+            person = read_claims_from_dynamodb(uid, config_values.dynamodb_claim_table,
                                                 aws_options)
     except Exception as e:
         logger.error(e.message)
-        return _fail_with_message(e.message)
+        return fail_with_message(e.message)
 
     claim_elapsed = (datetime.now() - claim_time).total_seconds()
     logger.info('Finished retrieving claims for {} in {} seconds.'.format(uid, claim_elapsed))
@@ -211,13 +88,23 @@ def main(run_options, aws_options):
         plans = _read_benefits_from_dict()
     except Exception as e:
         logger.error(e.message)
-        return _fail_with_message(e.message)
+        return fail_with_message(e.message)
 
     benefit_elapsed = (datetime.now() - benefit_time).total_seconds()
     logger.info('Finished retrieving benefits file in {} seconds.'.format(benefit_elapsed))
 
-    return _run_batch(person, plans, config_values.claims_year, run_options,
-                      config_values.dynamodb_cost_table, aws_options, start_time)
+    service = run_options.get('service', 'batch')
+    if service == 'batch':
+        return run_batch(person, plans, config_values.claims_year, run_options,
+                         config_values.dynamodb_cost_table, aws_options,
+                         logger, start_time)
+
+    elif service == 'detailed':
+        return run_detailed(person, plans, config_values.claims_year, run_options,
+                            logger, start_time)
+
+    else:
+        return fail_with_message('Unrecognized service: {}'.format(service))
 
 
 def lambda_handler(event, context):
@@ -269,8 +156,19 @@ if __name__ == '__main__':
         'region_name': None,
         'profile_name': 'sandbox',
     }
+
     run_options = {
-        'uid': '764308502',
+        'service': 'batch',
+        'uid': '1175404001',
+        'months': ['01'],
+        'states': ['42', '15'],
     }
 
-    main(run_options, aws_options)
+    # run_options = {
+    #     'service': 'detailed',
+    #     'uid': '1175404001',
+    #     'pids': ['2820028008119', '2820088001036'],
+    # }
+
+    print(main(run_options, aws_options))
+
