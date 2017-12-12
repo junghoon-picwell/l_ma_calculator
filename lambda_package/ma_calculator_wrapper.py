@@ -197,8 +197,9 @@ if __name__ == '__main__':
         'profile_name': None
     }
     run_options = {
-        'fips': [],
-        'uid': '764308502'
+        'uid': '764308502',
+        'months': [],
+        'state': [],
     }
 
     main(run_options, aws_options)
