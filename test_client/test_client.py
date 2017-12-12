@@ -12,7 +12,8 @@ class LambdaCalculatorTestClient(object):
         if aws_options is None:
             self._client = boto3.client('lambda')
         else:
-            self._client = boto3.client('lambda', **aws_options)
+            session = boto3.Session(**aws_options)
+            self._client = session.client('lambda')
 
     def _calculate_with_invocation_type(self, uid, months_list, states_list, invocation_type):
         request = {
