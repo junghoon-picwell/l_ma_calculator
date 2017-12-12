@@ -10,7 +10,7 @@ from test_client import LambdaCalculatorTestClient
 def test_for_user_ids_sync():
     test_client = LambdaCalculatorTestClient()
 
-    uid_to_test = "1009901"
+    uid_to_test = "1006243201"
     response = test_client.calculate_sync(uid_to_test)
 
     print(response)

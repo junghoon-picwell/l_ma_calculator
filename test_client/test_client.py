@@ -14,13 +14,19 @@ class LambdaCalculatorTestClient(object):
         else:
             self._client = boto3.client('lambda', **aws_options)
 
-    def _calculate_with_invocation_type(self, uid, invocation_type):
+    def _calculate_with_invocation_type(self, uid, months_list, states_list, invocation_type):
         request = {
             "httpMethod": "GET",
             "queryStringParameters": {
-                "uid": uid
+                "uid": uid,
             }
         }
+
+        if len(months_list) > 0:
+            request['months'] = months_list
+
+        if len(states_list) > 0:
+            request['states'] = states_list
 
         encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
@@ -55,7 +61,7 @@ class LambdaCalculatorTestClient(object):
             'ExecutedVersion': 'string'
         }
         '''
-        return self._calculate_with_invocation_type(uid, InvocationType.RequestResponse)
+        return self._calculate_with_invocation_type(uid, months_list=['01'], states_list=['42'], invocation_type=InvocationType.RequestResponse)
 
     def calculate_async(self, uid):
-        return self._calculate_with_invocation_type(uid, InvocationType.Event)
+        return self._calculate_with_invocation_type(uid, months_list=['01'], states_list=['42'], invocation_type=InvocationType.Event)
