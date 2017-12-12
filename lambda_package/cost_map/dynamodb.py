@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
+from lambda_package.storage import DynamoDBStorage
 from .utils import read_cost_json
-from storage import DynamoDBStorage
 
 _BATCH_WRITE_SIZE = 25  # cannot be larger than 25
 _MAX_WRITE_RETRIES = 9  # corresponds to total net delay of 1022 seconds (enough for auto scaling to work)

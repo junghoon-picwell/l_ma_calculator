@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import print_function
+
 import json
 import logging
-from benefits_2018 import MA_PLANS
-import time
+from datetime import datetime
 
-from datetime import timedelta, datetime
+from lambda_package.benefits_2018 import MA_PLANS
+from lambda_package.calc.calculator import calculate_oop
+from lambda_package.config_info import ConfigInfo
+from lambda_package.cost_map import DynamoDBCostMap
 from s3_helpers import read_json
-from config_info import ConfigInfo
-from cost_map import DynamoDBCostMap
-from calc.calculator import calculate_oop
 
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
