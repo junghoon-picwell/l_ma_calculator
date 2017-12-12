@@ -49,7 +49,7 @@ class LambdaCalculatorTestClient(object):
         )
         return response
 
-    def calculate_sync(self, uid):
+    def calculate_sync(self, uid, months_list, states_list):
         '''
         Response:
 
@@ -61,7 +61,7 @@ class LambdaCalculatorTestClient(object):
             'ExecutedVersion': 'string'
         }
         '''
-        return self._calculate_with_invocation_type(uid, months_list=['01'], states_list=['42'], invocation_type=InvocationType.RequestResponse)
+        return self._calculate_with_invocation_type(uid, months_list=months_list, states_list=states_list, invocation_type=InvocationType.RequestResponse)
 
-    def calculate_async(self, uid):
-        return self._calculate_with_invocation_type(uid, months_list=['01'], states_list=['42'], invocation_type=InvocationType.Event)
+    def calculate_async(self, uid, months_list, states_list):
+        return self._calculate_with_invocation_type(uid, months_list=months_list, states_list=states_list, invocation_type=InvocationType.Event)
