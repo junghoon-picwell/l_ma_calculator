@@ -2,7 +2,7 @@
 Convert a JSON MA benefit file into a file containing Python dictionaries.
 
 Run like this:
-    python benefit_to_file.py s3://picwell.sandbox.medicare/ma_benefits/cms_2018_pbps_20171005.json 2018_benefit.py
+    python benefit_to_file.py s3://picwell.sandbox.medicare/ma_benefits/cms_2018_pbps_20171005.json lambda_package/benefits_2018.py
 """
 
 import argparse

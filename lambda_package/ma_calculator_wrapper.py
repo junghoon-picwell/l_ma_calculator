@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import print_function
+
 import json
 import logging
-from benefits_2018 import MA_PLANS
-import time
+from datetime import datetime
 
-from datetime import timedelta, datetime
-from s3_helpers import read_json
+from benefits_2018 import MA_PLANS
+from calc.calculator import calculate_oop
 from config_info import ConfigInfo
 from cost_map import DynamoDBCostMap
-from calc.calculator import calculate_oop
+from s3_helpers import read_json
 
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
@@ -197,8 +197,9 @@ if __name__ == '__main__':
         'profile_name': None
     }
     run_options = {
-        'fips': [],
-        'uid': '764308502'
+        'uid': '764308502',
+        'months': [],
+        'state': [],
     }
 
     main(run_options, aws_options)

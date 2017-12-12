@@ -13,7 +13,10 @@ setup(
     author='Picwell',
     author_email='dev@picwell.com',
     url='http://www.picwell.com/',
-    install_requires=['boto3'],
+    install_requires=[
+        'boto3',
+        'ConfigParser',
+    ],
     tests_require=[
         'pytest',
     ],
