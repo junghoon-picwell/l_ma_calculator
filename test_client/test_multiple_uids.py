@@ -1,9 +1,8 @@
+from __future__ import absolute_import
 import json
 import pytest
-from ma_calculator_wrapper import main
 
 import boto3
-from ma_calculator_wrapper import main
 
 
 def _get_boto_client():
@@ -52,5 +51,5 @@ def test_for_user_ids():
     }
     '''
 
-    print response
+    print(response)
     assert response['statusCode'] == '202'

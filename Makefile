@@ -17,7 +17,6 @@ ver :
 
 package : clean
 	pip install -r lambda_package_requirements.txt -t $(LIB_DIR)
-	#pip install ../misscleo -t $(LIB_DIR)
 	# Using subshell to change directory
 	(cd $(SRC_DIR); zip -r $(OUTPUT) . -i \*.{py,cfg} -x "test*"; cd $(HERE))
 
