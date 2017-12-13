@@ -3,13 +3,16 @@
 
 # In[1]:
 
+
 get_ipython().magic(u'load_ext autotime')
 
 
-# In[2]:
+# In[35]:
+
 
 import json
 import time
+from datetime import datetime
 
 from etltools import s3
 from test_client import LambdaCalculatorTestClient

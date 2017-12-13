@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 
 from batch_api import run_batch
-from benefits_2018 import MA_PLANS  # see _read_benefits_from_dict()
+#from benefits_2018 import MA_PLANS  # see _read_benefits_from_dict()
 from config_info import ConfigInfo
 from detailed_api import run_detailed
 from utils import (
@@ -71,7 +71,7 @@ def main(run_options, aws_options):
             person = read_claims_from_s3(uid, config_values.claims_bucket, aws_options)
         else:
             person = read_claims_from_dynamodb(uid, config_values.dynamodb_claim_table,
-                                                aws_options)
+                                               aws_options)
     except Exception as e:
         logger.error(e.message)
         return fail_with_message(e.message)
@@ -84,8 +84,8 @@ def main(run_options, aws_options):
     benefit_time = datetime.now()
 
     try:
-        # plans = _read_benefits_from_s3(config_values.benefit_bucket, aws_options)
-        plans = _read_benefits_from_dict()
+        plans = read_benefits_from_s3(config_values.benefit_bucket, aws_options)
+        # plans = _read_benefits_from_dict()
     except Exception as e:
         logger.error(e.message)
         return fail_with_message(e.message)
@@ -129,7 +129,7 @@ def lambda_handler(event, context):
     operation = event['httpMethod']
     if operation in operations:
         payload = (event['queryStringParameters'] if operation == 'GET'
-                   else json.loads(event['body']))
+        else json.loads(event['body']))
 
         res = operations[operation](payload)
         if res['statusCode'] != '200':
@@ -171,4 +171,3 @@ if __name__ == '__main__':
     # }
 
     print(main(run_options, aws_options))
-
