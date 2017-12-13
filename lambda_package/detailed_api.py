@@ -48,4 +48,4 @@ def run_detailed(person, plans, claim_year, run_options, logger, start_time):
     elapsed = (end_time - start_time).total_seconds()
     logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_time), str(elapsed)))
 
-    return succeed_with_message(json.dumps(costs))
+    return succeed_with_message(costs)
