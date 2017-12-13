@@ -15,19 +15,20 @@ class LambdaCalculatorTestClient(object):
             session = boto3.Session(**aws_options)
             self._client = session.client('lambda')
 
-    def _calculate_with_invocation_type(self, uid, months_list, states_list, invocation_type):
+    def _calculate_with_invocation_type(self, uid, months, states, invocation_type):
         request = {
-            "httpMethod": "GET",
-            "queryStringParameters": {
-                "uid": uid,
+            'httpMethod': 'GET',
+            'queryStringParameters': {
+                'service': 'batch',
+                'uid': uid,
             }
         }
 
-        if len(months_list) > 0:
-            request['months'] = months_list
+        if months:
+            request['queryStringParameters']['months'] = months
 
-        if len(states_list) > 0:
-            request['states'] = states_list
+        if states:
+            request['queryStringParameters']['states'] = states
 
         encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
@@ -50,7 +51,7 @@ class LambdaCalculatorTestClient(object):
         )
         return response
 
-    def calculate_sync(self, uid, months_list, states_list):
+    def calculate_sync(self, uid, months=[], states=[]):
         '''
         Response:
 
@@ -62,7 +63,37 @@ class LambdaCalculatorTestClient(object):
             'ExecutedVersion': 'string'
         }
         '''
-        return self._calculate_with_invocation_type(uid, months_list=months_list, states_list=states_list, invocation_type=InvocationType.RequestResponse)
+        return self._calculate_with_invocation_type(uid, months=months, states=states,
+                                                    invocation_type=InvocationType.RequestResponse)
 
-    def calculate_async(self, uid, months_list, states_list):
-        return self._calculate_with_invocation_type(uid, months_list=months_list, states_list=states_list, invocation_type=InvocationType.Event)
+    def calculate_async(self, uid, months=[], states=[]):
+        return self._calculate_with_invocation_type(uid, months=months, states=states,
+                                                    invocation_type=InvocationType.Event)
+
+    def calculate_breakdown(self, uid, pids=[], month='01'):
+        request = {
+            'httpMethod': 'GET',
+            'queryStringParameters': {
+                'service': 'detailed',
+                'uid': uid,
+                'month': month,
+            }
+        }
+
+        if pids:
+            request['queryStringParameters']['pids'] = pids
+
+        encoded_payload = bytes(json.dumps(request)).encode('utf-8')
+        response = self._client.invoke(
+            FunctionName='ma_calculator',
+            InvocationType=InvocationType.RequestResponse,
+            LogType='None',
+            Payload=encoded_payload,
+        )
+
+        # TODO: there must be a better way to process the response than this.
+        if response['StatusCode'] != 200:
+            raise Exception(json.loads(response['Payload'].read())['body'])
+        else:
+            return json.loads(json.loads(response['Payload'].read())['body'])
+
