@@ -8,7 +8,7 @@ from utils import (
 )
 
 
-def _calculate_batch(person, plans, claim_year, fips_code, months, cost_map):
+def _calculate_batch(person, plans, claim_year, fips_code, months):
     # TODO: should we inflate claims?
     claims = person.get('medical_claims', [])
 
@@ -29,8 +29,7 @@ def _calculate_batch(person, plans, claim_year, fips_code, months, cost_map):
             'oops': oops
         })
 
-    # Write to cost map:
-    cost_map.add_items(cost_items)
+    return cost_items
 
 
 def run_batch(person, plans, claim_year, run_options, table_name, aws_options, logger, start_time):
@@ -49,11 +48,14 @@ def run_batch(person, plans, claim_year, run_options, table_name, aws_options, l
     logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
                 'Start calculation for batch processing:')
 
+    cost_items = []
     for state in states:
         plans_for_state = filter(lambda plan: plan['state_fips'] == state, plans)
 
         if plans_for_state:
-            _calculate_batch(person, plans_for_state, claim_year, state, months, cost_map)
+            cost_items += _calculate_batch(person, plans_for_state, claim_year, state, months)
+
+    cost_map.add_items(cost_items)
 
     end_time = datetime.now()
     elapsed = (end_time - start_time).total_seconds()

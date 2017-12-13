@@ -46,9 +46,12 @@ uids[:10]
 
 # In[ ]:
 
+requests_per_second = 100
+
 for uid in uids:
-    client.calculate_async(uid, months=['01'])
-    time.sleep(1.0/40)  # 40 requests for second
+#     client.calculate_async(uid, months=['01'])
+    client.calculate_async(uid)
+    time.sleep(1.0/requests_per_second)  
 
 
 # In[ ]:
