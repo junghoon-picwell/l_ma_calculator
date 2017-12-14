@@ -2,6 +2,7 @@ import boto3
 
 from s3_helpers import read_json
 
+# TODO: put this in config?
 CLAIMS_PATH = 'junghoon/lambda_calculator'
 BENEFITS_PATH = 'ma_benefits/cms_2018_pbps_20171005.json'
 

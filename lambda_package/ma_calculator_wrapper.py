@@ -4,10 +4,15 @@ from __future__ import print_function
 import json
 import logging
 from datetime import datetime
+import os
 
 from batch_api import run_batch
-#from benefits_2018 import MA_PLANS  # see _read_benefits_from_dict()
-from config_info import ConfigInfo
+if os.path.isfile('benefits.py'):
+    from benefits import MA_PLANS  # load benefits at load time
+from config_info import (
+    CONFIG_FILE_NAME,
+    ConfigInfo,
+)
 from detailed_api import run_detailed
 from utils import (
     fail_with_message,
@@ -15,8 +20,6 @@ from utils import (
     read_claims_from_dynamodb,
     read_benefits_from_s3,
 )
-
-CONFIG_FILE_NAME = 'calculator.cfg'
 
 logger = logging.getLogger()
 logging.basicConfig()
@@ -41,11 +44,6 @@ def _configure_logging(logger, log_level):
         logger.setLevel(logging.WARNING)
     else:
         logger.setLevel(logging.ERROR)
-
-
-def _read_benefits_from_dict():
-    # from benefits_2018 import MA_PLANS  # importing here is much slower
-    return MA_PLANS
 
 
 def main(run_options, aws_options):
@@ -84,8 +82,10 @@ def main(run_options, aws_options):
     benefit_time = datetime.now()
 
     try:
-        plans = read_benefits_from_s3(config_values.benefit_bucket, aws_options)
-        # plans = _read_benefits_from_dict()
+        if config_values.use_s3_for_benefits:
+            plans = read_benefits_from_s3(config_values.benefit_bucket, aws_options)
+        else:
+            plans = MA_PLANS
     except Exception as e:
         logger.error(e.message)
         return fail_with_message(e.message)

@@ -1,4 +1,7 @@
 import ConfigParser
+import sys
+
+CONFIG_FILE_NAME = 'lambda.cfg'
 
 
 class ConfigInfo(object):
@@ -15,4 +18,7 @@ class ConfigInfo(object):
         self.use_s3_for_claims = config_parser.get('claims', 'USE_S3') == 'TRUE'
         self.claims_year = config_parser.get('claims', 'CLAIMS_YEAR')
 
+        self.use_s3_for_benefits = config_parser.get('benefits', 'USE_S3') == 'TRUE'
+
         self.log_level = config_parser.get('general', 'LOG_LEVEL')
+
