@@ -16,6 +16,8 @@ from config_info import (
 from detailed_api import run_detailed
 from utils import (
     fail_with_message,
+)
+from storage_utils import (
     read_claims_from_s3,
     read_claims_from_dynamodb,
     read_benefits_from_s3,
@@ -47,8 +49,8 @@ def _configure_logging(logger, log_level):
 
 
 def main(run_options, aws_options):
-    config_values = ConfigInfo(CONFIG_FILE_NAME)
-    _configure_logging(logger, config_values.log_level)
+    configs = ConfigInfo(CONFIG_FILE_NAME)
+    _configure_logging(logger, configs.log_level)
 
     start_time = datetime.now()
     logger.info('Clock started at {}'.format(str(start_time)))
@@ -65,11 +67,14 @@ def main(run_options, aws_options):
     claim_time = datetime.now()
 
     try:
-        if config_values.use_s3_for_claims:
-            person = read_claims_from_s3(uid, config_values.claims_bucket, aws_options)
+        if configs.use_s3_for_claims:
+            person = read_claims_from_s3(uid, configs.claims_bucket, configs.claims_path,
+                                         aws_options)
+
         else:
-            person = read_claims_from_dynamodb(uid, config_values.dynamodb_claim_table,
+            person = read_claims_from_dynamodb(uid, configs.claims_table,
                                                aws_options)
+
     except Exception as e:
         logger.error(e.message)
         return fail_with_message(e.message)
@@ -82,10 +87,13 @@ def main(run_options, aws_options):
     benefit_time = datetime.now()
 
     try:
-        if config_values.use_s3_for_benefits:
-            plans = read_benefits_from_s3(config_values.benefit_bucket, aws_options)
+        if configs.use_s3_for_benefits:
+            plans = read_benefits_from_s3(configs.benefits_bucket, configs.benefits_path,
+                                          aws_options)
+
         else:
             plans = MA_PLANS
+
     except Exception as e:
         logger.error(e.message)
         return fail_with_message(e.message)
@@ -95,12 +103,12 @@ def main(run_options, aws_options):
 
     service = run_options.get('service', 'batch')
     if service == 'batch':
-        return run_batch(person, plans, config_values.claims_year, run_options,
-                         config_values.dynamodb_cost_table, aws_options,
+        return run_batch(person, plans, configs.claims_year, run_options,
+                         configs.costs_table, aws_options,
                          logger, start_time)
 
     elif service == 'detailed':
-        return run_detailed(person, plans, config_values.claims_year, run_options,
+        return run_detailed(person, plans, configs.claims_year, run_options,
                             logger, start_time)
 
     else:

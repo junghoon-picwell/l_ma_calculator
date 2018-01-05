@@ -1,0 +1,13 @@
+.DS_Store
+.idea/
+.ipynb_checkpoints/
+*.pyc
+
+# Code shared between client and Lambda package
+lambda_package/lambda.cfg
+lambda_package/config_info.py
+lambda_package/storage_utils.py
+
+# Build related:
+build/
+lambda_package/lib/
