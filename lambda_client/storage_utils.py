@@ -1,3 +1,7 @@
+# Absolute imports are not used because the code is shared with lambda_package:
+#
+# from __future__ import  absolute_import
+
 import boto3
 import json
 import os

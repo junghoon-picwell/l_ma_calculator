@@ -1,14 +1,14 @@
 def succeed_with_message(message):
     return {
-        'statusCode': '200',
-        'message': message
+        'StatusCode': 200,
+        'Message': message
     }
 
 
 def fail_with_message(message):
     return {
-        'statusCode': '500',
-        'message': message
+        'StatusCode': 500,
+        'Message': message
     }
 
 
