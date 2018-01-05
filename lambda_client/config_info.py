@@ -18,6 +18,7 @@ class ConfigInfo(object):
         'use_s3_for_claims',
         'claims_year',
         'use_s3_for_benefits',
+        'all_states',
         'log_level',
     )
 
@@ -40,6 +41,8 @@ class ConfigInfo(object):
         self.claims_year = config_parser.get('claims', 'CLAIMS_YEAR')
 
         self.use_s3_for_benefits = config_parser.get('benefits', 'USE_S3') == 'TRUE'
+        self.all_states = [state.strip() for state in
+                           config_parser.get('benefits', 'ALL_STATES').split(',')]
 
         self.log_level = config_parser.get('general', 'LOG_LEVEL')
 

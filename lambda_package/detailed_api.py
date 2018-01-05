@@ -26,14 +26,13 @@ def _calculate_detail(person, plans, claim_year, month):
     return costs
 
 
-def run_detailed(person, plans, claim_year, run_options, logger, start_time):
+def run_detailed(person, benefits_client, claim_year, run_options, logger, start_time):
     # If no pids is given, run for all available plans:
     if 'pids' in run_options:
-        pids = set(str(pid) for pid in run_options['pids'])
-        filtered_plans = filter(lambda plan: str(plan['picwell_id']) in pids, plans)
+        plans = benefits_client.get_by_pid(run_options['pids'])
 
     else:
-        filtered_plans = plans
+        plans = benefits_client.get_all()
 
     # Use the full year if the proration period is not specified:
     month = str(run_options.get('month', 1)).zfill(2)
@@ -42,7 +41,7 @@ def run_detailed(person, plans, claim_year, run_options, logger, start_time):
     logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
                 'Start calculation to return full calculation results:')
 
-    costs = _calculate_detail(person, filtered_plans, claim_year, month)
+    costs = _calculate_detail(person, plans, claim_year, month)
 
     end_time = datetime.now()
     elapsed = (end_time - start_time).total_seconds()

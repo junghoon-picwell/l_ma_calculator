@@ -9,6 +9,9 @@ from config_info import (
     ConfigInfo,
 )
 
+ALL_STATES = ()
+
+
 def _json_from_s3(s3_bucket, s3_path, resource):
     content_object = resource.Object(s3_bucket, s3_path)
 
@@ -86,27 +89,15 @@ class ClaimsClient(object):
 
 
 class BenefitsClient(object):
-    __slots__ = ('_resource', '_s3_bucket', '_s3_path')
-    _ALL_STATES = ('01', '04', '05', '06', '08',
-                   '09', '10', '11', '12', '13',
-                   '15', '16', '17', '18', '19',
-                   '20', '21', '22', '23', '24',
-                   '25', '26', '27', '28', '29',
-                   '30', '31', '32', '33', '34',
-                   '35', '36', '37', '38', '39',
-                   '40', '41', '42', '44', '45',
-                   '46', '47', '48', '49', '50',
-                   '51', '53', '54', '55', '56',
-                   '72')
+    __slots__ = ('_resource', '_s3_bucket', '_s3_path', '_all_states')
 
     def __init__(self, aws_info, s3_bucket=None, s3_path=None):
         use_config = (s3_bucket is None and s3_path is None)
         assert (use_config or
                 (s3_bucket is not None and s3_path is not None))
 
+        configs = ConfigInfo(CONFIG_FILE_NAME)
         if use_config:
-            configs = ConfigInfo(CONFIG_FILE_NAME)
-
             self._s3_bucket = configs.benefits_bucket
             self._s3_path = configs.benefits_path
 
@@ -117,12 +108,18 @@ class BenefitsClient(object):
         session = boto3.Session(**aws_info)
         self._resource = session.resource('s3')
 
+        self._all_states = configs.all_states
+
+    @property
+    def all_states(self):
+        return self._all_states
+
     def _get_one_state(self, state):
         file_name = os.path.join(self._s3_path, '{}.json'.format(state))
         return _read_json(self._s3_bucket, file_name, self._resource)
 
-    def _get_all_states(self, states):
-        assert all(state in BenefitsClient._ALL_STATES for state in states)
+    def get_by_state(self, states):
+        assert all(state in self.all_states for state in states)
 
         # Issue a thread for each state given:
         queue = Queue.Queue()
@@ -144,25 +141,16 @@ class BenefitsClient(object):
 
         return plans
 
+    def get_by_pid(self, pids):
+        # Ensure that PIDs are treated as strings:
+        pids = set(str(pid) for pid in pids)
+
+        # Read plans in only those necessasry states:
+        states = {pid[-2:] for pid in pids}
+        plans = self.get_by_state(states)
+
+        return filter(lambda plan: str(plan['picwell_id']) in pids, plans)
+
     def get_all(self):
-        return self._get_all_states(BenefitsClient._ALL_STATES)
-
-    def get(self, pids):
-        pass
-
-
-# TODO: the following functions should be deprecated:
-def read_claims_from_s3(uid, s3_bucket, s3_path, aws_options):
-    client = ClaimsClient(aws_options, s3_bucket=s3_bucket, s3_path=s3_path)
-    return client._get_from_s3(uid)
-
-
-def read_claims_from_dynamodb(uid, table_name, aws_options):
-    client = ClaimsClient(aws_options, table_name=table_name)
-    return client._get_from_dynamodb(uid)
-
-
-def read_benefits_from_s3(s3_bucket, s3_path, aws_options):
-    client = BenefitsClient(aws_options, s3_bucket=s3_bucket, s3_path=s3_path)
-    return client.get_all()
+        return self.get_by_state(self.all_states)
 

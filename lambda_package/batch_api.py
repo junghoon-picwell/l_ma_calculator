@@ -32,7 +32,8 @@ def _calculate_batch(person, plans, claim_year, fips_code, months):
     return cost_items
 
 
-def run_batch(person, plans, claim_year, run_options, table_name, aws_options, logger, start_time):
+def run_batch(person, benefits_client, claim_year, run_options, table_name, aws_options,
+              logger, start_time):
     cost_map = DynamoDBCostMap(table_name=table_name, aws_options=aws_options)
 
     # Read states and propration periods to consider. If not given use default values (all
@@ -40,20 +41,16 @@ def run_batch(person, plans, claim_year, run_options, table_name, aws_options, l
     months = run_options.get('months', (month + 1 for month in range(12)))
     months = [str(month).zfill(2) for month in months]
 
-    states = set(run_options.get('states',
-                                 (plan['state_fips'] for plan in plans)))
-    states = [str(state) for state in states]
-
     setup_elapsed = (datetime.now() - start_time).total_seconds()
     logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
                 'Start calculation for batch processing:')
 
     cost_items = []
-    for state in states:
-        plans_for_state = filter(lambda plan: plan['state_fips'] == state, plans)
+    for state in benefits_client.all_states:
+        plans = benefits_client.get_by_state([state])
 
-        if plans_for_state:
-            cost_items += _calculate_batch(person, plans_for_state, claim_year, state, months)
+        if plans:
+            cost_items += _calculate_batch(person, plans, claim_year, state, months)
 
     cost_map.add_items(cost_items)
 

@@ -26,48 +26,56 @@ uid = '1000101'
 
 # # Test ConfigInfo
 
-# In[4]:
+# In[11]:
 
 from lambda_client.config_info import ConfigInfo
 
-config = ConfigInfo('lambda_client/lambda.cfg')
+configs = ConfigInfo('lambda_client/lambda.cfg')
 
-print config.claims_bucket
-print config.claims_path
+print configs.claims_bucket
+print configs.claims_path
 print
-print config.benefits_bucket
-print config.benefits_path
+print configs.benefits_bucket
+print configs.benefits_path
 print
-print config.claims_table
+print configs.claims_table
+
+
+# In[12]:
+
+all_states = configs.all_states
+
+print '{} states'.format(len(all_states))
+print all_states
 
 
 # # Test ClaimsClient
 
-# In[5]:
+# In[ ]:
 
 from lambda_client import ClaimsClient
 
 
-# In[6]:
+# In[ ]:
 
 # Test S3:
 client = ClaimsClient(aws_info, 
-                      s3_bucket=config.claims_bucket,
-                      s3_path=config.claims_path)
+                      s3_bucket=configs.claims_bucket,
+                      s3_path=configs.claims_path)
 
 client.get(uid)
 
 
-# In[7]:
+# In[ ]:
 
 # Test DynamoDB:
 client = ClaimsClient(aws_info,
-                      table_name=config.claims_table)
+                      table_name=configs.claims_table)
 
 client.get(uid)
 
 
-# In[8]:
+# In[ ]:
 
 # Test configuration file:
 client = ClaimsClient(aws_info)
@@ -77,14 +85,19 @@ client.get(uid)
 
 # # Test BenefitsClient
 
-# In[9]:
+# In[13]:
 
 from lambda_client import BenefitsClient
 
 
-# In[10]:
+# In[14]:
 
 client = BenefitsClient(aws_info)
+
+print client.all_states
+
+
+# In[5]:
 
 plans = client._get_one_state('01')
 print '{} plans read for state 01'.format(len(plans))
@@ -93,19 +106,19 @@ plans = client._get_one_state('04')
 print '{} plans read for state 04'.format(len(plans))
 
 
-# In[11]:
+# In[6]:
 
-plans = client._get_all_states(['01', '04'])
+plans = client.get_by_state(['01', '04'])
 print '{} plans read'.format(len(plans))
 
 
-# In[12]:
+# In[7]:
 
 plans = client.get_all()
 print '{} plans read'.format(len(plans))
 
 
-# In[13]:
+# In[8]:
 
 # Compare the timing against reading the entire file:
 from lambda_client.storage_utils import _read_json
@@ -114,14 +127,14 @@ session = boto3.Session(**aws_info)
 resource = session.resource('s3')
 
 
-# In[14]:
+# In[9]:
 
 all_plans = _read_json('picwell.sandbox.medicare', 'ma_benefits/cms_2018_pbps_20171005.json', resource)
 
 print '{} plans read'.format(len(plans))
 
 
-# In[15]:
+# In[10]:
 
 # Ensure that the same plans are read:
 sort_key = lambda plan: plan['picwell_id']

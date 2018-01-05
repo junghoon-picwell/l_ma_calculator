@@ -18,13 +18,20 @@ from utils import (
     fail_with_message,
 )
 from storage_utils import (
-    read_claims_from_s3,
-    read_claims_from_dynamodb,
-    read_benefits_from_s3,
+    ClaimsClient,
+    BenefitsClient,
 )
 
 logger = logging.getLogger()
 logging.basicConfig()
+
+
+class DummyBenefitsClient(object):
+    """ Provides BenefitsClient interface for MA_PLANS.
+    """
+    def get(self, pids):
+        pids = set(str(pid) for pid in pids)
+        return filter(lambda plan: str(plan['picwell_id']) in pids, MA_PLANS)
 
 
 def respond(err, res=None):
@@ -67,13 +74,8 @@ def main(run_options, aws_options):
     claim_time = datetime.now()
 
     try:
-        if configs.use_s3_for_claims:
-            person = read_claims_from_s3(uid, configs.claims_bucket, configs.claims_path,
-                                         aws_options)
-
-        else:
-            person = read_claims_from_dynamodb(uid, configs.claims_table,
-                                               aws_options)
+        claims_client = ClaimsClient(aws_options)
+        person = claims_client.get(uid)
 
     except Exception as e:
         logger.error(e.message)
@@ -88,11 +90,10 @@ def main(run_options, aws_options):
 
     try:
         if configs.use_s3_for_benefits:
-            plans = read_benefits_from_s3(configs.benefits_bucket, configs.benefits_path,
-                                          aws_options)
+            benefits_client = BenefitsClient(aws_options)
 
         else:
-            plans = MA_PLANS
+            benefits_client = DummyBenefitsClient()
 
     except Exception as e:
         logger.error(e.message)
@@ -103,12 +104,12 @@ def main(run_options, aws_options):
 
     service = run_options.get('service', 'batch')
     if service == 'batch':
-        return run_batch(person, plans, configs.claims_year, run_options,
+        return run_batch(person, benefits_client, configs.claims_year, run_options,
                          configs.costs_table, aws_options,
                          logger, start_time)
 
     elif service == 'detailed':
-        return run_detailed(person, plans, configs.claims_year, run_options,
+        return run_detailed(person, benefits_client, configs.claims_year, run_options,
                             logger, start_time)
 
     else:
