@@ -7,13 +7,14 @@ import json
 import os
 import Queue
 import threading
+import time
 
 from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
 
-ALL_STATES = ()
+_REQUEST_DELAY = 0.02  # at most 50 requests per second
 
 
 def _json_from_s3(s3_bucket, s3_path, resource):
@@ -133,6 +134,7 @@ class BenefitsClient(object):
                                  args=(queue, state))
             threads.append(t)
             t.start()
+            time.sleep(_REQUEST_DELAY)
 
         # Wait for all threads to finish:
         for t in threads:

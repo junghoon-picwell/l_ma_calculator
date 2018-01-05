@@ -2,8 +2,13 @@ from __future__ import absolute_import
 
 import json
 import boto3
+import Queue
+import threading
+import time
 
 from .invocation_types import InvocationType
+
+_REQUEST_DELAY = 0.03  # at most 33 requests per second
 
 
 class CalculatorClient(object):
@@ -12,7 +17,7 @@ class CalculatorClient(object):
         session = boto3.Session(**aws_info)
         self._resource = session.client('lambda')
 
-    def _get_one_breakdown(self, uid, pids=[], month='01'):
+    def _get_one_breakdown(self, uid, pids, month):
         request = {
             'httpMethod': 'GET',
             'queryStringParameters': {
@@ -22,7 +27,7 @@ class CalculatorClient(object):
             }
         }
 
-        if pids:
+        if pids is not None:
             request['queryStringParameters']['pids'] = pids
 
         encoded_payload = bytes(json.dumps(request)).encode('utf-8')
@@ -44,3 +49,26 @@ class CalculatorClient(object):
 
             else:
                 return calculator_response['Message']
+
+    # TODO: improve error handling with threading.Thread since some threads can fail.
+    def get_breakdown(self, uids, pids=None, month='01'):
+        # Issue a thread for each state given:
+        queue = Queue.Queue()
+        threads = []
+        for uid in uids:
+            t = threading.Thread(target=lambda q, u, p, m: q.put(self._get_one_breakdown(u, p, m)),
+                                 args=(queue, uid, pids, month))
+            threads.append(t)
+            t.start()
+            time.sleep(_REQUEST_DELAY)
+
+        # Wait for all threads to finish:
+        for t in threads:
+            t.join()
+
+        # Combine all the results:
+        costs = []
+        while not queue.empty():
+            costs += queue.get()
+
+        return costs
