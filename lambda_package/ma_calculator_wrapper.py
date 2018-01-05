@@ -34,16 +34,6 @@ class DummyBenefitsClient(object):
         return filter(lambda plan: str(plan['picwell_id']) in pids, MA_PLANS)
 
 
-def respond(err, res=None):
-    return {
-        'statusCode': '400' if err else '200',
-        'body': err.message if err else json.dumps(res),
-        'headers': {
-            'Content-Type': 'application/json',
-        },
-    }
-
-
 def _configure_logging(logger, log_level):
     if log_level == 'DEBUG':
         logger.setLevel(logging.DEBUG)
@@ -140,14 +130,10 @@ def lambda_handler(event, context):
         payload = (event['queryStringParameters'] if operation == 'GET'
         else json.loads(event['body']))
 
-        res = operations[operation](payload)
-        if res['statusCode'] != '200':
-            return respond(ValueError(res['message']), res['message'])
-
-        return respond(None, res['message'])
+        return operations[operation](payload)
 
     else:
-        return respond(ValueError('Unsupported method "{}"'.format(operation)))
+        return fail_with_message('Unsupported method "{}"'.format(operation))
 
 
 if __name__ == '__main__':
