@@ -10,6 +10,8 @@ get_ipython().magic(u'load_ext autotime')
 
 import boto3
 import json
+import pickle
+import pytest
 import time
 
 from etltools import s3
@@ -84,21 +86,28 @@ client = ClaimsClient(aws_info)
 client.get(uids[0])
 
 
+# In[10]:
+
+# The object should not be pickled.
+with pytest.raises(Exception, match='ClaimsClient object cannot be pickled.'):
+    pickle.dumps(client)
+
+
 # # Test BenefitsClient
 
-# In[10]:
+# In[11]:
 
 from lambda_client import BenefitsClient
 
 
-# In[11]:
+# In[12]:
 
 client = BenefitsClient(aws_info)
 
 print client.all_states
 
 
-# In[12]:
+# In[13]:
 
 plans = client._get_one_state('01')
 print '{} plans read for state 01'.format(len(plans))
@@ -107,19 +116,19 @@ plans = client._get_one_state('04')
 print '{} plans read for state 04'.format(len(plans))
 
 
-# In[13]:
+# In[14]:
 
 plans = client.get_by_state(['01', '04'])
 print '{} plans read'.format(len(plans))
 
 
-# In[14]:
+# In[15]:
 
 plans = client.get_all()
 print '{} plans read'.format(len(plans))
 
 
-# In[15]:
+# In[16]:
 
 # Compare the timing against reading the entire file:
 from lambda_client.storage_utils import _read_json
@@ -128,30 +137,37 @@ session = boto3.Session(**aws_info)
 resource = session.resource('s3')
 
 
-# In[16]:
+# In[17]:
 
 all_plans = _read_json('picwell.sandbox.medicare', 'ma_benefits/cms_2018_pbps_20171005.json', resource)
 
 print '{} plans read'.format(len(plans))
 
 
-# In[17]:
+# In[18]:
 
 # Ensure that the same plans are read:
 sort_key = lambda plan: plan['picwell_id']
 assert sorted(all_plans, key=sort_key) == sorted(plans, key=sort_key)
 
 
+# In[19]:
+
+# The object should not be pickled.
+with pytest.raises(Exception, match='BenefitsClient object cannot be pickled.'):
+    pickle.dumps(client)
+
+
 # # Test Cost Breakdown
 
-# In[18]:
+# In[20]:
 
 from lambda_client import CalculatorClient
 
 client = CalculatorClient(aws_info)
 
 
-# In[19]:
+# In[21]:
 
 responses = client._get_one_breakdown(uids[0], pids, '01')
 
@@ -159,21 +175,14 @@ print '{} responses returned'.format(len(responses))
 responses[0]
 
 
-# In[20]:
-
-responses = client.get_breakdown(uids[0])
-
-print '{} responses returned'.format(len(responses))
-
-
-# In[21]:
+# In[22]:
 
 responses = client.get_breakdown(uids[:3], pids)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[22]:
+# In[23]:
 
 # Let's try something larger:
 responses = client.get_breakdown(uids, pids)

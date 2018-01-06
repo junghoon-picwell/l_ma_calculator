@@ -8,30 +8,37 @@ import time
 
 from .invocation_types import InvocationType
 
-_REQUEST_DELAY = 0.03  # at most 33 requests per second
+# The code runs into "too many open files" error without a delay.
+_REQUEST_DELAY = 0.01  # at most 1000 requests per second
 
 
 class CalculatorClient(object):
 
     def __init__(self, aws_info=None):
-        session = boto3.Session(**aws_info)
-        self._resource = session.client('lambda')
+        self._aws_info = {} if aws_info is None else aws_info
+
+    def __getstate__(self):
+        raise Exception('CalculatorClient object cannot be pickled')
 
     def _get_one_breakdown(self, uid, pids, month):
         request = {
             'httpMethod': 'GET',
             'queryStringParameters': {
-                'service': 'detailed',
+                'service': 'breakdown',
                 'uid': uid,
+                'pids': pids,
                 'month': month,
             }
         }
 
-        if pids is not None:
-            request['queryStringParameters']['pids'] = pids
-
         encoded_payload = bytes(json.dumps(request)).encode('utf-8')
-        response = self._resource.invoke(
+
+        # boto3 is not thread safe:
+        # http://boto3.readthedocs.io/en/latest/guide/resources.html#multithreading-multiprocessing
+        session = boto3.Session(**self._aws_info)
+        client = session.client('lambda')
+
+        response = client.invoke(
             FunctionName='ma_calculator',
             InvocationType=InvocationType.RequestResponse,
             LogType='None',
@@ -51,7 +58,7 @@ class CalculatorClient(object):
                 return calculator_response['Message']
 
     # TODO: improve error handling with threading.Thread since some threads can fail.
-    def get_breakdown(self, uids, pids=None, month='01'):
+    def get_breakdown(self, uids, pids, month='01'):
         # Issue a thread for each state given:
         queue = Queue.Queue()
         threads = []

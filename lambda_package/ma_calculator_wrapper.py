@@ -13,7 +13,7 @@ from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
-from detailed_api import run_detailed
+from breakdown_api import run_breakdown
 from utils import (
     fail_with_message,
 )
@@ -92,15 +92,15 @@ def main(run_options, aws_options):
     benefit_elapsed = (datetime.now() - benefit_time).total_seconds()
     logger.info('Finished retrieving benefits file in {} seconds.'.format(benefit_elapsed))
 
-    service = run_options.get('service', 'batch')
+    service = run_options['service']
     if service == 'batch':
         return run_batch(person, benefits_client, configs.claims_year, run_options,
                          configs.costs_table, aws_options,
                          logger, start_time)
 
-    elif service == 'detailed':
-        return run_detailed(person, benefits_client, configs.claims_year, run_options,
-                            logger, start_time)
+    elif service == 'breakdown':
+        return run_breakdown(person, benefits_client, configs.claims_year, run_options,
+                             logger, start_time)
 
     else:
         return fail_with_message('Unrecognized service: {}'.format(service))

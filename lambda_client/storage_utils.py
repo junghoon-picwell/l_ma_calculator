@@ -7,14 +7,11 @@ import json
 import os
 import Queue
 import threading
-import time
 
 from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
-
-_REQUEST_DELAY = 0.02  # at most 50 requests per second
 
 
 def _json_from_s3(s3_bucket, s3_path, resource):
@@ -32,9 +29,9 @@ def _read_json(s3_bucket, s3_path, resource):
 
 
 class ClaimsClient(object):
-    __slots__ = ('_resource', '_s3_bucket', '_s3_path', '_table_name')
+    __slots__ = ('_aws_info', '_s3_bucket', '_s3_path', '_table_name')
 
-    def __init__(self, aws_info,
+    def __init__(self, aws_info=None,
                  s3_bucket=None, s3_path=None,
                  table_name=None):
         # 3 options are provided: use config file, S3, or DynamoDB.
@@ -61,16 +58,22 @@ class ClaimsClient(object):
             self._s3_path = s3_path
             self._table_name = table_name
 
-        session = boto3.Session(**aws_info)
-        self._resource = session.resource('s3' if self.use_s3 else 'dynamodb')
+        self._aws_info = {} if aws_info is None else aws_info
 
     @property
     def use_s3(self):
         return self._s3_bucket is not None
 
+    def __getstate__(self):
+        # AWS credentials should not be stored.
+        raise Exception('ClaimsClient object cannot be pickled.')
+
     def _get_from_s3(self, uid):
+        session = boto3.Session(**self._aws_info)
+        resource = session.resource('s3')
+
         file_name = os.path.join(self._s3_path, '{}.json'.format(uid))
-        claims_list = _read_json(self._s3_bucket, file_name, self._resource)
+        claims_list = _read_json(self._s3_bucket, file_name, resource)
 
         if not claims_list:
             message = 'No user data located at s3://{}'.format(file_name)
@@ -79,24 +82,26 @@ class ClaimsClient(object):
         return claims_list[0]
 
     def _get_from_dynamodb(self, uid):
-        table = self._resource.Table(self._table_name)
+        session = boto3.Session(**self._aws_info)
+        resource = session.resource('dynamodb')
+        table = resource.Table(self._table_name)
 
-        res = table.get_item(Key={'uid': uid},
-                             ConsistentRead=False)
-        if 'Item' not in res or not res['Item']:  # not sure exactly what happens
+        response = table.get_item(Key={'uid': uid},
+                                  ConsistentRead=False)
+        if 'Item' not in response or not response['Item']:  # not sure exactly what happens
             message = 'No user data located in {} table'.format(self._table_name)
             raise Exception(message)
 
-        return res['Item']
+        return response['Item']
 
     def get(self, uid):
         return self._get_from_s3(uid) if self.use_s3 else self._get_from_dynamodb(uid)
 
 
 class BenefitsClient(object):
-    __slots__ = ('_resource', '_s3_bucket', '_s3_path', '_all_states')
+    __slots__ = ('_aws_info', '_s3_bucket', '_s3_path', '_all_states')
 
-    def __init__(self, aws_info, s3_bucket=None, s3_path=None):
+    def __init__(self, aws_info=None, s3_bucket=None, s3_path=None):
         use_config = (s3_bucket is None and s3_path is None)
         assert (use_config or
                 (s3_bucket is not None and s3_path is not None))
@@ -110,18 +115,25 @@ class BenefitsClient(object):
             self._s3_bucket = s3_bucket
             self._s3_path = s3_path
 
-        session = boto3.Session(**aws_info)
-        self._resource = session.resource('s3')
-
+        self._aws_info = {} if aws_info is None else aws_info
         self._all_states = configs.all_states
 
     @property
     def all_states(self):
         return self._all_states
 
+    def __getstate__(self):
+        # AWS credentials should not be stored.
+        raise Exception('BenefitsClient object cannot be pickled.')
+
     def _get_one_state(self, state):
+        # boto3 is not thread safe:
+        # http://boto3.readthedocs.io/en/latest/guide/resources.html#multithreading-multiprocessing
+        session = boto3.Session(**self._aws_info)
+        resource = session.resource('s3')
+
         file_name = os.path.join(self._s3_path, '{}.json'.format(state))
-        return _read_json(self._s3_bucket, file_name, self._resource)
+        return _read_json(self._s3_bucket, file_name, resource)
 
     def get_by_state(self, states):
         assert all(state in self.all_states for state in states)
@@ -134,7 +146,6 @@ class BenefitsClient(object):
                                  args=(queue, state))
             threads.append(t)
             t.start()
-            time.sleep(_REQUEST_DELAY)
 
         # Wait for all threads to finish:
         for t in threads:

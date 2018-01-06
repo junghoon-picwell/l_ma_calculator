@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 
 from calc.calculator import calculate_oop
@@ -8,7 +7,7 @@ from utils import (
 )
 
 
-def _calculate_detail(person, plans, claim_year, month):
+def _calculate_breakdown(person, plans, claim_year, month):
     # TODO: should we inflate claims?
     claims = person.get('medical_claims', [])
     claims_to_process = filter_and_sort_claims(claims, claim_year, month)
@@ -26,13 +25,8 @@ def _calculate_detail(person, plans, claim_year, month):
     return costs
 
 
-def run_detailed(person, benefits_client, claim_year, run_options, logger, start_time):
-    # If no pids is given, run for all available plans:
-    if 'pids' in run_options:
-        plans = benefits_client.get_by_pid(run_options['pids'])
-
-    else:
-        plans = benefits_client.get_all()
+def run_breakdown(person, benefits_client, claim_year, run_options, logger, start_time):
+    plans = benefits_client.get_by_pid(run_options['pids'])
 
     # Use the full year if the proration period is not specified:
     month = str(run_options.get('month', 1)).zfill(2)
@@ -41,7 +35,7 @@ def run_detailed(person, benefits_client, claim_year, run_options, logger, start
     logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
                 'Start calculation to return full calculation results:')
 
-    costs = _calculate_detail(person, plans, claim_year, month)
+    costs = _calculate_breakdown(person, plans, claim_year, month)
 
     end_time = datetime.now()
     elapsed = (end_time - start_time).total_seconds()
