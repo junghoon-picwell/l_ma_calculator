@@ -1,7 +1,9 @@
 from __future__ import absolute_import
 
+import datetime
 import json
 import boto3
+import logging
 import Queue
 import threading
 import time
@@ -10,6 +12,8 @@ from .invocation_types import InvocationType
 
 # The code runs into "too many open files" error without a delay.
 _REQUEST_DELAY = 0.01  # at most 1000 requests per second
+
+logger = logging.getLogger()
 
 
 class CalculatorClient(object):
@@ -60,6 +64,8 @@ class CalculatorClient(object):
     # TODO: improve error handling with threading.Thread since some threads can fail.
     def get_breakdown(self, uids, pids, month='01'):
         # Issue a thread for each state given:
+        start = datetime.datetime.now()
+
         queue = Queue.Queue()
         threads = []
         for uid in uids:
@@ -69,13 +75,26 @@ class CalculatorClient(object):
             t.start()
             time.sleep(_REQUEST_DELAY)
 
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to start all threads for get_breakdown().'.format(time_elapsed))
+
         # Wait for all threads to finish:
+        start = datetime.datetime.now()
+
         for t in threads:
             t.join()
 
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to join all threads for get_breakdown().'.format(time_elapsed))
+
         # Combine all the results:
+        start = datetime.datetime.now()
+
         costs = []
         while not queue.empty():
             costs += queue.get()
+
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to combine results for get_breakdown().'.format(time_elapsed))
 
         return costs

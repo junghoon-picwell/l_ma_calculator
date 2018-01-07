@@ -3,6 +3,8 @@
 # from __future__ import  absolute_import
 
 import boto3
+import datetime
+import logging
 import json
 import os
 import Queue
@@ -13,6 +15,7 @@ from config_info import (
     ConfigInfo,
 )
 
+logger = logging.getLogger()
 
 def _json_from_s3(s3_bucket, s3_path, resource):
     content_object = resource.Object(s3_bucket, s3_path)
@@ -139,6 +142,8 @@ class BenefitsClient(object):
         assert all(state in self.all_states for state in states)
 
         # Issue a thread for each state given:
+        start = datetime.datetime.now()
+
         queue = Queue.Queue()
         threads = []
         for state in states:
@@ -147,14 +152,27 @@ class BenefitsClient(object):
             threads.append(t)
             t.start()
 
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to start all threads for get_by_state().'.format(time_elapsed))
+
         # Wait for all threads to finish:
+        start = datetime.datetime.now()
+
         for t in threads:
             t.join()
 
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to join all threads for get_by_state().'.format(time_elapsed))
+
         # Combine all the results:
+        start = datetime.datetime.now()
+
         plans = []
         while not queue.empty():
             plans += queue.get()
+
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to combine results for get_by_state().'.format(time_elapsed))
 
         return plans
 

@@ -22,8 +22,8 @@ from storage_utils import (
     BenefitsClient,
 )
 
-logger = logging.getLogger()
 logging.basicConfig()
+logger = logging.getLogger()
 
 
 class DummyBenefitsClient(object):
