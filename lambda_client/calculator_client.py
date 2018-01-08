@@ -10,8 +10,8 @@ import time
 
 from .invocation_types import InvocationType
 
-# The code runs into "too many open files" error without a delay.
-_REQUEST_DELAY = 0.01  # at most 1000 requests per second
+_MAX_ACTIVE_THREADS = 100
+_DELAY_TO_FINISH = 0.01
 
 logger = logging.getLogger()
 
@@ -69,11 +69,14 @@ class CalculatorClient(object):
         queue = Queue.Queue()
         threads = []
         for uid in uids:
+            # Limit the number of active threads to manage the number of open files:
+            while threading.active_count() >= _MAX_ACTIVE_THREADS:
+                time.sleep(_DELAY_TO_FINISH)
+
             t = threading.Thread(target=lambda q, u, p, m: q.put(self._get_one_breakdown(u, p, m)),
                                  args=(queue, uid, pids, month))
             threads.append(t)
             t.start()
-            time.sleep(_REQUEST_DELAY)
 
         time_elapsed = (datetime.datetime.now() - start).total_seconds()
         logger.info('{} seconds to start all threads for get_breakdown().'.format(time_elapsed))

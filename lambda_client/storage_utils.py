@@ -8,12 +8,16 @@ import logging
 import json
 import os
 import Queue
+import time
 import threading
 
 from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
+
+_MAX_ACTIVE_THREADS = 100
+_DELAY_TO_FINISH = 0.01
 
 logger = logging.getLogger()
 
@@ -147,6 +151,10 @@ class BenefitsClient(object):
         queue = Queue.Queue()
         threads = []
         for state in states:
+            # Limit the number of active threads to manage the number of open files:
+            while threading.active_count() >= _MAX_ACTIVE_THREADS:
+                time.sleep(_DELAY_TO_FINISH)
+
             t = threading.Thread(target=lambda q, s: q.put(self._get_one_state(s)),
                                  args=(queue, state))
             threads.append(t)

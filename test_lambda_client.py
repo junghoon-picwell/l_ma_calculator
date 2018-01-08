@@ -200,12 +200,24 @@ responses[0]
 
 # In[24]:
 
-responses = client.get_breakdown(uids[:3], pids)
+responses = client.get_breakdown(uids[:1], pids)
 
 print '{} responses returned'.format(len(responses))
 
 
 # In[25]:
+
+# It seems like
+#
+# (a) the time it takes to issue threads increases linearly; and
+# (b) the time it takes for the last thread to finish is about 5 seconds all the time. 
+for num_people in range(2, 15):
+    responses = client.get_breakdown(uids[:num_people], pids)
+
+    print '{} responses returned'.format(len(responses))
+
+
+# In[26]:
 
 # Let's try something larger:
 responses = client.get_breakdown(uids, pids)
@@ -215,19 +227,19 @@ print '{} responses returned'.format(len(responses))
 
 # # Test Batch Calculation
 
-# In[26]:
+# In[27]:
 
 # uids = s3.read_json('s3n://picwell.sandbox.medicare/samples/philadelphia-2015')
 
 # print '{} uids read'.format(len(uids))
 
 
-# In[27]:
+# In[28]:
 
 # uids[:10]
 
 
-# In[28]:
+# In[29]:
 
 # requests_per_second = 100
 
