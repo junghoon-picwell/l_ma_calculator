@@ -3,12 +3,14 @@ from __future__ import absolute_import
 import json
 import boto3
 import logging
+
 from multiprocessing.pool import ThreadPool
+# from .storage_utils import ThreadPool
+
+_MAX_THREADS = 100  # prevent opening too many files
 
 from .invocation_types import InvocationType
 
-# This limits opening too many files:
-_MAX_THREADS = None  # use value from cpu_count()
 
 logger = logging.getLogger()
 

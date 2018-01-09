@@ -3,10 +3,14 @@
 # from __future__ import  absolute_import
 
 import boto3
+import datetime
 import logging
 import json
-from multiprocessing.pool import ThreadPool
+import multiprocessing
 import os
+import Queue
+import threading
+import time
 
 from config_info import (
     CONFIG_FILE_NAME,
@@ -14,9 +18,73 @@ from config_info import (
 )
 
 # This limits opening too many files:
-_MAX_THREADS = None  # use value from cpu_count()
+_MAX_THREADS = 100
 
 logger = logging.getLogger()
+
+
+class ThreadPool(object):
+    """
+    Alternative implementation of multiprocessing.pool.ThreadPool for AWS Lambda. We
+    found that the implementation in multiprocessing uses too much memory and also
+    has some instability issues on AWS Lambda, possibly due multiprocessing.Queue
+    described here:
+
+    https://aws.amazon.com/blogs/compute/parallel-processing-in-python-with-aws-lambda/
+
+    The current implementation does not really recycle threads; it just limits the
+    total number of active threads. See
+
+    https://github.com/python/cpython/blob/master/Lib/multiprocessing/pool.py
+
+    for a better implementation.
+    """
+    _DELAY = 0.01
+
+    def __init__(self, processes=None):
+        self._processes = multiprocessing.cpu_count() if processes is None else processes
+
+    def map(self, fun, sequence):
+        start = datetime.datetime.now()
+
+        queue = Queue.Queue()
+        threads = []
+        for index, value in enumerate(sequence):
+            # Limit the number of active threads to manage the number of open files:
+            while threading.active_count() >= self._processes:
+                time.sleep(ThreadPool._DELAY)
+
+            t = threading.Thread(target=lambda q, i, v: q.put([index, fun(v)]),
+                                 args=(queue, index, value))
+            threads.append(t)
+            t.start()
+
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to start all threads.'.format(time_elapsed))
+
+        # Wait for all threads to finish:
+        start = datetime.datetime.now()
+
+        for t in threads:
+            t.join()
+
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to join all threads.'.format(time_elapsed))
+
+        # Combine all the results:
+        start = datetime.datetime.now()
+
+        pairs = []  # (index, return value) pairs
+        while not queue.empty():
+            pairs.append(queue.get())
+        sorted_pairs = sorted(pairs, key=lambda pair: pair[0])
+
+        time_elapsed = (datetime.datetime.now() - start).total_seconds()
+        logger.info('{} seconds to combine results for get_by_state().'.format(time_elapsed))
+
+        for index, value in sorted_pairs:
+            yield value
+
 
 def _json_from_s3(s3_bucket, s3_path, resource):
     content_object = resource.Object(s3_bucket, s3_path)
@@ -105,9 +173,9 @@ class ClaimsClient(object):
         pool = ThreadPool(processes=_MAX_THREADS)
 
         if self.use_s3:
-            return pool.map(lambda uid: self._get_from_s3(uid), uids)
+            return list(pool.map(lambda uid: self._get_from_s3(uid), uids))
         else:
-            return pool.map(lambda uid: self._get_from_dynamodb(uid), uids)
+            return list(pool.map(lambda uid: self._get_from_dynamodb(uid), uids))
 
 
 class BenefitsClient(object):
