@@ -3,21 +3,17 @@
 # from __future__ import  absolute_import
 
 import boto3
-import datetime
 import logging
 import json
+import multiprocessing
 import os
-import Queue
-import time
-import threading
 
 from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
 
-_MAX_ACTIVE_THREADS = 100
-_DELAY_TO_FINISH = 0.01
+_MAX_THREADS = 100  # this limits opening too many files
 
 logger = logging.getLogger()
 
@@ -145,42 +141,17 @@ class BenefitsClient(object):
     def get_by_state(self, states):
         assert all(state in self.all_states for state in states)
 
-        # Issue a thread for each state given:
-        start = datetime.datetime.now()
+        # Issue a thread for each state because this is IO bound:
+        #
+        # Processes cannot be used because the object cannot be pickled for security reasons.
+        pool = multiprocessing.pool.ThreadPool(_MAX_THREADS)
 
-        queue = Queue.Queue()
-        threads = []
-        for state in states:
-            # Limit the number of active threads to manage the number of open files:
-            while threading.active_count() >= _MAX_ACTIVE_THREADS:
-                time.sleep(_DELAY_TO_FINISH)
+        returned_plans = pool.map(lambda state: self._get_one_state(state), states)
 
-            t = threading.Thread(target=lambda q, s: q.put(self._get_one_state(s)),
-                                 args=(queue, state))
-            threads.append(t)
-            t.start()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to start all threads for get_by_state().'.format(time_elapsed))
-
-        # Wait for all threads to finish:
-        start = datetime.datetime.now()
-
-        for t in threads:
-            t.join()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to join all threads for get_by_state().'.format(time_elapsed))
-
-        # Combine all the results:
-        start = datetime.datetime.now()
-
+        # Each call can return multiple plans:
         plans = []
-        while not queue.empty():
-            plans += queue.get()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to combine results for get_by_state().'.format(time_elapsed))
+        for returned_plan in returned_plans:
+            plans += returned_plan
 
         return plans
 

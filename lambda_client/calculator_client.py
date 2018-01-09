@@ -1,17 +1,13 @@
 from __future__ import absolute_import
 
-import datetime
 import json
 import boto3
 import logging
-import Queue
-import threading
-import time
+import multiprocessing
 
 from .invocation_types import InvocationType
 
-_MAX_ACTIVE_THREADS = 100
-_DELAY_TO_FINISH = 0.01
+_MAX_THREADS = 100  # this limits opening too many files
 
 logger = logging.getLogger()
 
@@ -63,41 +59,18 @@ class CalculatorClient(object):
 
     # TODO: improve error handling with threading.Thread since some threads can fail.
     def get_breakdown(self, uids, pids, month='01'):
-        # Issue a thread for each state given:
-        start = datetime.datetime.now()
+        # Issue a thread for each person:
+        #
+        # Processes cannot be used because the object cannot be pickled for security reasons.
+        pool = multiprocessing.pool.ThreadPool(_MAX_THREADS)
 
-        queue = Queue.Queue()
-        threads = []
-        for uid in uids:
-            # Limit the number of active threads to manage the number of open files:
-            while threading.active_count() >= _MAX_ACTIVE_THREADS:
-                time.sleep(_DELAY_TO_FINISH)
+        # Each call can return costs for multiple plans:
+        returned_costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month),
+                                  uids)
 
-            t = threading.Thread(target=lambda q, u, p, m: q.put(self._get_one_breakdown(u, p, m)),
-                                 args=(queue, uid, pids, month))
-            threads.append(t)
-            t.start()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to start all threads for get_breakdown().'.format(time_elapsed))
-
-        # Wait for all threads to finish:
-        start = datetime.datetime.now()
-
-        for t in threads:
-            t.join()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to join all threads for get_breakdown().'.format(time_elapsed))
-
-        # Combine all the results:
-        start = datetime.datetime.now()
-
+        # Combine all results:
         costs = []
-        while not queue.empty():
-            costs += queue.get()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to combine results for get_breakdown().'.format(time_elapsed))
+        for returned_cost in returned_costs:
+            costs += returned_cost
 
         return costs

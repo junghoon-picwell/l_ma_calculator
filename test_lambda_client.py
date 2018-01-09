@@ -9,6 +9,7 @@ get_ipython().magic(u'load_ext autotime')
 # In[2]:
 
 import boto3
+import datetime
 import logging
 import json
 import pickle
@@ -212,9 +213,11 @@ print '{} responses returned'.format(len(responses))
 # (a) the time it takes to issue threads increases linearly; and
 # (b) the time it takes for the last thread to finish is about 5 seconds all the time. 
 for num_people in range(2, 15):
+    start = datetime.datetime.now()
     responses = client.get_breakdown(uids[:num_people], pids)
+    elapsed = (datetime.datetime.now() - start).total_seconds()
 
-    print '{} responses returned'.format(len(responses))
+    print '{} responses returned ({} seconds)'.format(len(responses), elapsed)
 
 
 # In[26]:
