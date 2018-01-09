@@ -3,11 +3,12 @@ from __future__ import absolute_import
 import json
 import boto3
 import logging
-import multiprocessing
+from multiprocessing.pool import ThreadPool
 
 from .invocation_types import InvocationType
 
-_MAX_THREADS = 100  # this limits opening too many files
+# This limits opening too many files:
+_MAX_THREADS = None  # use value from cpu_count()
 
 logger = logging.getLogger()
 
@@ -62,15 +63,10 @@ class CalculatorClient(object):
         # Issue a thread for each person:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = multiprocessing.pool.ThreadPool(_MAX_THREADS)
+        pool = ThreadPool(processes=_MAX_THREADS)
 
         # Each call can return costs for multiple plans:
-        returned_costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month),
-                                  uids)
+        costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month), uids)
 
-        # Combine all results:
-        costs = []
-        for returned_cost in returned_costs:
-            costs += returned_cost
-
-        return costs
+        # Combine all costs and return:
+        return sum(costs, [])

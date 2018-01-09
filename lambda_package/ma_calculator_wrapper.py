@@ -64,8 +64,9 @@ def main(run_options, aws_options):
     claim_time = datetime.now()
 
     try:
+        # TODO: the claims need to be infalted!
         claims_client = ClaimsClient(aws_options)
-        person = claims_client.get(uid)
+        person = claims_client.get([uid])[0]
 
     except Exception as e:
         logger.error(e.message)

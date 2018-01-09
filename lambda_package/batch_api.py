@@ -38,6 +38,8 @@ def run_batch(person, benefits_client, claim_year, run_options, table_name, aws_
 
     # Read states and propration periods to consider. If not given use default values (all
     # states among the plans and all proration periods, respectively).
+    states = run_options.get('states', benefits_client.all_states)
+    
     months = run_options.get('months', (month + 1 for month in range(12)))
     months = [str(month).zfill(2) for month in months]
 
@@ -46,7 +48,7 @@ def run_batch(person, benefits_client, claim_year, run_options, table_name, aws_
                 'Start calculation for batch processing:')
 
     cost_items = []
-    for state in benefits_client.all_states:
+    for state in states:
         plans = benefits_client.get_by_state([state])
 
         if plans:

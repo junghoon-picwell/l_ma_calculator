@@ -5,7 +5,7 @@
 import boto3
 import logging
 import json
-import multiprocessing
+from multiprocessing.pool import ThreadPool
 import os
 
 from config_info import (
@@ -13,7 +13,8 @@ from config_info import (
     ConfigInfo,
 )
 
-_MAX_THREADS = 100  # this limits opening too many files
+# This limits opening too many files:
+_MAX_THREADS = None  # use value from cpu_count()
 
 logger = logging.getLogger()
 
@@ -97,8 +98,16 @@ class ClaimsClient(object):
 
         return response['Item']
 
-    def get(self, uid):
-        return self._get_from_s3(uid) if self.use_s3 else self._get_from_dynamodb(uid)
+    def get(self, uids):
+        # Issue a thread for each state because this is IO bound:
+        #
+        # Processes cannot be used because the object cannot be pickled for security reasons.
+        pool = ThreadPool(processes=_MAX_THREADS)
+
+        if self.use_s3:
+            return pool.map(lambda uid: self._get_from_s3(uid), uids)
+        else:
+            return pool.map(lambda uid: self._get_from_dynamodb(uid), uids)
 
 
 class BenefitsClient(object):
@@ -144,16 +153,13 @@ class BenefitsClient(object):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = multiprocessing.pool.ThreadPool(_MAX_THREADS)
+        pool = ThreadPool(processes=_MAX_THREADS)
 
-        returned_plans = pool.map(lambda state: self._get_one_state(state), states)
+        # Each call can return plans:
+        plans = pool.map(lambda state: self._get_one_state(state), states)
 
-        # Each call can return multiple plans:
-        plans = []
-        for returned_plan in returned_plans:
-            plans += returned_plan
-
-        return plans
+        # Combine and return:
+        return sum(plans, [])
 
     def get_by_pid(self, pids):
         # Ensure that PIDs are treated as strings:

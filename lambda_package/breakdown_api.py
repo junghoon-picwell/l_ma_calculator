@@ -17,8 +17,10 @@ def _calculate_breakdown(person, plans, claim_year, month):
         cost = calculate_oop(claims_to_process, plan, force_network='in_network',
                              truncate_claims_at_year_boundary=False)
 
-        cost['uid'] = person['uid']
-        cost['picwell_id'] = str(plan['picwell_id'])
+        cost.update({
+            'uid': person['uid'],
+            'picwell_id': str(plan['picwell_id']),
+        })
 
         costs.append(cost)
 
