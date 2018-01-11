@@ -5,7 +5,7 @@ import boto3
 import logging
 
 from multiprocessing.pool import ThreadPool
-# from .storage_utils import ThreadPool
+# from .shared_utils import ThreadPool
 
 _MAX_THREADS = 100  # prevent opening too many files
 

@@ -1,11 +1,11 @@
 import logging
 
 from calc.calculator import calculate_oop
-from utils import (
+from package_utils import (
     fail_with_message,
     filter_and_sort_claims,
-    TimeLogger,
 )
+from shared_utils import TimeLogger
 
 logger = logging.getLogger()
 

@@ -242,3 +242,37 @@ class BenefitsClient(object):
     def get_all(self):
         return self.get_by_state(self.all_states)
 
+
+class TimeLogger(object):
+    __slots__ = (
+        '_logger',
+        '_start_message',
+        '_end_message',
+        '_start_time',
+    )
+
+    def __init__(self, logger, end_message='', start_message=''):
+        """
+        Use {time} and {elapsed} to capture the current time and time elapsed. {elapsed} is
+        only meaningful for the end_message.
+        """
+        self._logger = logger
+        self._start_message = start_message
+        self._end_message = end_message
+
+    def __enter__(self):
+        self._start_time = datetime.datetime.now()
+
+        if self._start_message:
+            self._logger.info(self._start_message.format(time=self._start_time))
+
+        return self._start_time
+
+    # TODO: introduce better error handling?
+    def __exit__(self, exception_type, exception_value, traceback):
+        time = datetime.datetime.now()
+        elapsed = (time - self._start_time).total_seconds()
+
+        if self._end_message:
+            self._logger.info(self._end_message.format(time=time, elapsed=elapsed))
+

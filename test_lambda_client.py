@@ -175,7 +175,7 @@ print '{} plans read'.format(len(plans))
 # In[20]:
 
 # Compare the timing against reading the entire file:
-from lambda_client.storage_utils import _read_json
+from lambda_client.shared_utils import _read_json
 
 session = boto3.Session(**aws_info)
 resource = session.resource('s3')

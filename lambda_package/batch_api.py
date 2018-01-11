@@ -2,11 +2,11 @@ import logging
 
 from calc.calculator import calculate_oop
 from cost_map import DynamoDBCostMap
-from utils import (
+from package_utils import (
     filter_and_sort_claims,
     fail_with_message,
-    TimeLogger,
 )
+from shared_utils import TimeLogger
 
 logger = logging.getLogger()
 

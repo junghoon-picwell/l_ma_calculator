@@ -22,7 +22,7 @@ ver :
 package : clean
 	cp $(SRC_DIR)/lambda.cfg $(TAR_DIR)
 	cp $(SRC_DIR)/config_info.py $(TAR_DIR)
-	cp $(SRC_DIR)/storage_utils.py $(TAR_DIR)
+	cp $(SRC_DIR)/shared_utils.py $(TAR_DIR)
 
 	# Generate hard-coded benefits file if needed:
 	$(if $(BENEFIT), python benefit_to_file.py $(BENEFIT) $(TAR_DIR)/benefits.py)
@@ -39,7 +39,7 @@ clean :
 	# Files shared by client and lambda package:
 	[ -f $(TAR_DIR)/lambda.cfg ] && rm $(TAR_DIR)/lambda.cfg || true
 	[ -f $(TAR_DIR)/config_info.py ] && rm $(TAR_DIR)/config_info.py || true
-	[ -f $(TAR_DIR)/storage_utils.py ] && rm $(TAR_DIR)/storage_utils.py || true
+	[ -f $(TAR_DIR)/shared_utils.py ] && rm $(TAR_DIR)/shared_utils.py || true
 
 	# Hard-coded benefits file:
 	[ -f $(TAR_DIR)/benefits.py ] && rm $(TAR_DIR)/benefits.py || true

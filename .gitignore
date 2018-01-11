@@ -6,7 +6,7 @@
 # Code shared between client and Lambda package
 lambda_package/lambda.cfg
 lambda_package/config_info.py
-lambda_package/storage_utils.py
+lambda_package/shared_utils.py
 
 # Build related:
 build/
