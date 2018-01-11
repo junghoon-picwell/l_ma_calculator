@@ -160,10 +160,19 @@ if __name__ == '__main__':
         'states': ['42', '15'],
     }
 
-    # run_options = {
-    #     'service': 'detailed',
-    #     'uid': '1175404001',
-    #     'pids': ['2820028008119', '2820088001036'],
-    # }
+    print('BATCH RUN')
+    print()
+    print(main(run_options, aws_options))
+    print()
 
+    run_options = {
+        'service': 'breakdown',
+        # 'uids': ['1302895801', '3132439001', '2294063501', '1280937802', '31812914701'],
+        'uid': '1302895801',
+        'pids': ['2820028008119', '2820088001036'],
+        'month': '01',
+    }
+
+    print('BREAKDOWN RUN')
+    print()
     print(main(run_options, aws_options))
