@@ -4,8 +4,8 @@ import json
 import boto3
 import logging
 
-from multiprocessing.pool import ThreadPool
-# from .shared_utils import ThreadPool
+# from multiprocessing.pool import ThreadPool
+from .shared_utils import ThreadPool
 
 _MAX_THREADS = 100  # prevent opening too many files
 
@@ -23,7 +23,7 @@ class CalculatorClient(object):
     def __getstate__(self):
         raise Exception('CalculatorClient object cannot be pickled')
 
-    def _get_one_breakdown(self, uid, pids, month):
+    def _get_one_breakdown(self, uid, pids, month, verbose):
         request = {
             'httpMethod': 'GET',
             'queryStringParameters': {
@@ -58,17 +58,19 @@ class CalculatorClient(object):
                 raise Exception(calculator_response['Message'])
 
             else:
-                return calculator_response['Message']
+                if verbose:
+                    print calculator_response['Message']
+                return calculator_response['Return']
 
     # TODO: improve error handling with threading.Thread since some threads can fail.
-    def get_breakdown(self, uids, pids, month='01'):
+    def get_breakdown(self, uids, pids, month='01', verbose=False):
         # Issue a thread for each person:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
         pool = ThreadPool(processes=_MAX_THREADS)
 
         # Each call can return costs for multiple plans:
-        costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month), uids)
+        costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month, verbose), uids)
 
         # Combine all costs and return:
         return sum(costs, [])

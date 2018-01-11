@@ -14,8 +14,8 @@ from config_info import (
 )
 from breakdown_api import run_breakdown
 from package_utils import (
-    fail_with_message,
-    succeed_with_message,
+    message_failure,
+    message_success,
 )
 from shared_utils import (
     ClaimsClient,
@@ -52,7 +52,7 @@ def _run_calculator(run_options, aws_options):
 
     with TimeLogger(logger,
                     start_message='Clock started at {time}.',
-                    end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)'):
+                    end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)') as tl:
         # Setup clients to load claims and benefits:
         claims_client = ClaimsClient(aws_options)
 
@@ -66,14 +66,18 @@ def _run_calculator(run_options, aws_options):
         if service == 'batch':
             uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
                             configs.costs_table, aws_options)
-            result = succeed_with_message('batch calculation complete for {}'.format(uid))
+
+            message = 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
+            result = message_success(message)
 
         elif service == 'breakdown':
             costs = run_breakdown(claims_client, benefits_client, configs.claims_year, run_options)
-            result = succeed_with_message(costs)
+
+            message = 'Cost breakdown complete (elapsed: {} seconds).'.format(tl.elapsed)
+            result = message_success(message, costs)
 
         else:
-            result = fail_with_message('Unrecognized service: {}'.format(service))
+            result = message_failure('Unrecognized service: {}'.format(service))
 
     return result
 
@@ -105,7 +109,7 @@ def lambda_handler(event, context):
         return operations[operation](payload)
 
     else:
-        return fail_with_message('Unsupported method "{}"'.format(operation))
+        return message_failure('Unsupported method "{}"'.format(operation))
 
 
 if __name__ == '__main__':

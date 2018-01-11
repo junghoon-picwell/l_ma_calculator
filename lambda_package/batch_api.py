@@ -4,7 +4,7 @@ from calc.calculator import calculate_oop
 from cost_map import DynamoDBCostMap
 from package_utils import (
     filter_and_sort_claims,
-    fail_with_message,
+    message_failure,
 )
 from shared_utils import TimeLogger
 
@@ -59,7 +59,7 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
 
         except Exception as e:
             logger.error(e.message)
-            return fail_with_message(e.message)
+            return message_failure(e.message)
 
     with TimeLogger(logger,
                     end_message='Establishing connection to DynamoDB took {elapsed} seconds.'):
@@ -77,7 +77,7 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
 
             except Exception as e:
                 logger.error(e.message)
-                return fail_with_message(e.message)
+                return message_failure(e.message)
 
         if plans:
             message = 'Calculation for {}'.format(state) + ' took {elapsed} seconds.'

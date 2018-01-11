@@ -1,14 +1,15 @@
-import datetime
-
-
-def succeed_with_message(message):
-    return {
+def message_success(message, value=None):
+    dct = {
         'StatusCode': 200,
         'Message': message
     }
+    if value is not None:
+        dct['Return'] = value
+
+    return dct
 
 
-def fail_with_message(message):
+def message_failure(message):
     return {
         'StatusCode': 500,
         'Message': message

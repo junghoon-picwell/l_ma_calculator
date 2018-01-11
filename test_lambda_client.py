@@ -213,7 +213,7 @@ client = CalculatorClient(aws_info)
 
 # In[25]:
 
-responses = client._get_one_breakdown(uids[0], pids, '01')
+responses = client._get_one_breakdown(uids[0], pids, '01', True)
 
 print '{} responses returned'.format(len(responses))
 responses[0]
@@ -221,7 +221,7 @@ responses[0]
 
 # In[26]:
 
-responses = client.get_breakdown(uids[:1], pids)
+responses = client.get_breakdown(uids[:1], pids, verbose=True)
 
 print '{} responses returned'.format(len(responses))
 
@@ -251,28 +251,28 @@ print '{} responses returned'.format(len(responses))
 # In[29]:
 
 # Run calculcations locally for comparison:
-# from lambda_package.calc.calculator import calculate_oop
+from lambda_package.calc.calculator import calculate_oop
 
-# claims_client = ClaimsClient(aws_info)
-# people = claims_client.get(uids)
+claims_client = ClaimsClient(aws_info)
+people = claims_client.get(uids)
 
-# benefits_client = BenefitsClient(aws_info)
-# plans = benefits_client.get_by_pid(pids)
+benefits_client = BenefitsClient(aws_info)
+plans = benefits_client.get_by_pid(pids)
 
-# costs = []
-# for person in people:
-#     claims = person['medical_claims']
+costs = []
+for person in people:
+    claims = person['medical_claims']
     
-#     for plan in plans:
-#         cost = calculate_oop(claims, plan)
-#         cost.update({
-#             'uid': person['uid'],
-#             'picwell_id': str(plan['picwell_id']),
-#         })
+    for plan in plans:
+        cost = calculate_oop(claims, plan)
+        cost.update({
+            'uid': person['uid'],
+            'picwell_id': str(plan['picwell_id']),
+        })
         
-#         costs.append(cost)
+        costs.append(cost)
         
-# print '{} costs calculated'.format(len(costs))
+print '{} costs calculated'.format(len(costs))
 
 
 # # Test Batch Calculation
@@ -297,11 +297,6 @@ print '{} responses returned'.format(len(responses))
 # #     client.calculate_async(uid, months=['01'])
 #     client.calculate_async(uid)
 #     time.sleep(1.0/requests_per_second)  
-
-
-# In[ ]:
-
-
 
 
 # In[ ]:

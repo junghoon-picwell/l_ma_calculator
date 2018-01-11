@@ -40,21 +40,28 @@ class TimeLogger(object):
         self._start_message = start_message
         self._end_message = end_message
 
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @property
+    def elapsed(self):
+        return (datetime.datetime.now() - self._start_time).total_seconds()
+
     def __enter__(self):
         self._start_time = datetime.datetime.now()
 
         if self._start_message:
             self._logger.info(self._start_message.format(time=self._start_time))
 
-        return self._start_time
+        return self
 
     # TODO: introduce better error handling?
     def __exit__(self, exception_type, exception_value, traceback):
         time = datetime.datetime.now()
-        elapsed = (time - self._start_time).total_seconds()
 
         if self._end_message:
-            self._logger.info(self._end_message.format(time=time, elapsed=elapsed))
+            self._logger.info(self._end_message.format(time=time, elapsed=self.elapsed))
 
 
 class ThreadPool(object):

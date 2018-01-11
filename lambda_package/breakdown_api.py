@@ -2,7 +2,7 @@ import logging
 
 from calc.calculator import calculate_oop
 from package_utils import (
-    fail_with_message,
+    message_failure,
     filter_and_sort_claims,
 )
 from shared_utils import TimeLogger
@@ -50,7 +50,7 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
 
         except Exception as e:
             logger.error(e.message)
-            return fail_with_message(e.message)
+            return message_failure(e.message)
 
     # look up plans from s3
     with TimeLogger(logger,
@@ -60,7 +60,7 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
 
         except Exception as e:
             logger.error(e.message)
-            return fail_with_message(e.message)
+            return message_failure(e.message)
 
     with TimeLogger(logger,
                     end_message='Calculation took {elapsed} seconds.'):

@@ -32,7 +32,7 @@ package : clean
 	# pip install ../misscleo -t $(LIB_DIR)
 
 	# Using subshell to change directory
-	(cd $(TAR_DIR); zip -r $(OUTPUT) . -i \*.{py,cfg} -x "test*"; cd $(HERE))
+	(cd $(TAR_DIR); zip -r $(OUTPUT) . -i VERSION -i \*.{py,cfg} -x "test*"; cd $(HERE))
 
 clean :
 	[ -d $(LIB_DIR) ] && rm -rf $(LIB_DIR) && (rm -rf $(HERE)/build/* || true) || true
