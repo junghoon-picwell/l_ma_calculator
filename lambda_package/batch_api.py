@@ -1,4 +1,3 @@
-import datetime
 import logging
 
 from calc.calculator import calculate_oop
@@ -6,6 +5,7 @@ from cost_map import DynamoDBCostMap
 from utils import (
     filter_and_sort_claims,
     fail_with_message,
+    TimeLogger,
 )
 
 logger = logging.getLogger()
@@ -51,61 +51,41 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
     months = [str(month).zfill(2) for month in months]
 
     # look up claims:
-    logger.info('Retrieving claims for {}...'.format(uid))
-    claim_time = datetime.datetime.now()
-
-    try:
-        # TODO: the claims need to be infalted!
-        person = claims_client.get([uid])[0]
-
-    except Exception as e:
-        logger.error(e.message)
-        return fail_with_message(e.message)
-
-    claim_elapsed = (datetime.datetime.now() - claim_time).total_seconds()
-    logger.info('Finished retrieving claims for {} in {} seconds.'.format(uid, claim_elapsed))
-
-    logger.info('Establishing DynamoDB connection...')
-    db_setup_time = datetime.datetime.now()
-
-    cost_map = DynamoDBCostMap(table_name=table_name, aws_options=aws_options)
-
-    db_setup_elapsed = (datetime.datetime.now() - db_setup_time).total_seconds()
-    logger.info('Established connection in {} seconds.'.format(db_setup_elapsed))
-
-    cost_items = []
-    for state in states:
-        logger.info('Processing state {}...'.format(state))
-
-        # look up plans from s3
-        logger.info('Retrieving benefits...'.format(state))
-        benefit_time = datetime.datetime.now()
-
+    message = 'Claim retrieval for {}'.format(uid) + ' took {elapsed} seconds.'
+    with TimeLogger(logger, end_message=message):
         try:
-            plans = benefits_client.get_by_state([state])
+            # TODO: the claims need to be infalted!
+            person = claims_client.get([uid])[0]
 
         except Exception as e:
             logger.error(e.message)
             return fail_with_message(e.message)
 
-        benefit_elapsed = (datetime.datetime.now() - benefit_time).total_seconds()
-        logger.info('Retrieved benefits in {} seconds.'.format(benefit_elapsed))
+    with TimeLogger(logger,
+                    end_message='Establishing connection to DynamoDB took {elapsed} seconds.'):
+        cost_map = DynamoDBCostMap(table_name=table_name, aws_options=aws_options)
+
+    cost_items = []
+    for state in states:
+        logger.info('Processing state {}:'.format(state))
+
+        # look up plans from s3
+        message = 'Benefit retrieval for {}'.format(state) + ' took {elapsed} seconds.'
+        with TimeLogger(logger, end_message=message):
+            try:
+                plans = benefits_client.get_by_state([state])
+
+            except Exception as e:
+                logger.error(e.message)
+                return fail_with_message(e.message)
 
         if plans:
-            logger.info('Calculating...'.format(state))
-            compute_time = datetime.datetime.now()
+            message = 'Calculation for {}'.format(state) + ' took {elapsed} seconds.'
+            with TimeLogger(logger, end_message=message):
+                cost_items += _calculate_batch(person, plans, claim_year, state, months)
 
-            cost_items += _calculate_batch(person, plans, claim_year, state, months)
-
-            compute_elapsed = (datetime.datetime.now() - compute_time).total_seconds()
-            logger.info('Calculation done in {} seconds.'.format(compute_elapsed))
-
-    logger.info('Writing to DynamoDB...'.format(state))
-    write_time = datetime.datetime.now()
-
-    cost_map.add_items(cost_items)
-
-    write_elapsed = (datetime.datetime.now() - write_time).total_seconds()
-    logger.info('Write done in {} seconds.'.format(write_elapsed))
+    with TimeLogger(logger,
+                    end_message='Write to DynamoDB took {elapsed} seconds.'):
+        cost_map.add_items(cost_items)
 
     return uid

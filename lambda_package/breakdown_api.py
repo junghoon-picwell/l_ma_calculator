@@ -1,10 +1,10 @@
-import datetime
 import logging
 
 from calc.calculator import calculate_oop
 from utils import (
     fail_with_message,
     filter_and_sort_claims,
+    TimeLogger,
 )
 
 logger = logging.getLogger()
@@ -42,34 +42,28 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
     month = str(run_options.get('month', 1)).zfill(2)
 
     # look up claims:
-    logger.info('Retrieving claims for {}...'.format(uid))
-    claim_time = datetime.datetime.now()
+    message = 'Claim retrieval for {}'.format(uid) + ' took {elapsed} seconds.'
+    with TimeLogger(logger, end_message=message):
+        try:
+            # TODO: the claims need to be infalted!
+            person = claims_client.get([uid])[0]
 
-    try:
-        # TODO: the claims need to be infalted!
-        person = claims_client.get([uid])[0]
-
-    except Exception as e:
-        logger.error(e.message)
-        return fail_with_message(e.message)
-
-    claim_elapsed = (datetime.datetime.now() - claim_time).total_seconds()
-    logger.info('Finished retrieving claims for {} in {} seconds.'.format(uid, claim_elapsed))
+        except Exception as e:
+            logger.error(e.message)
+            return fail_with_message(e.message)
 
     # look up plans from s3
-    logger.info('Retrieving benefits...')
-    benefit_time = datetime.datetime.now()
+    with TimeLogger(logger,
+                    end_message='Benefit retrieval took {elapsed} seconds.'):
+        try:
+            plans = benefits_client.get_by_pid(run_options['pids'])
 
-    try:
-        plans = benefits_client.get_by_pid(run_options['pids'])
+        except Exception as e:
+            logger.error(e.message)
+            return fail_with_message(e.message)
 
-    except Exception as e:
-        logger.error(e.message)
-        return fail_with_message(e.message)
-
-    benefit_elapsed = (datetime.datetime.now() - benefit_time).total_seconds()
-    logger.info('Retrieved benefits in {} seconds.'.format(benefit_elapsed))
-
-    costs = _calculate_breakdown(person, plans, claim_year, month)
+    with TimeLogger(logger,
+                    end_message='Calculation took {elapsed} seconds.'):
+        costs = _calculate_breakdown(person, plans, claim_year, month)
 
     return costs

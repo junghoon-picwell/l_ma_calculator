@@ -3,7 +3,6 @@ from __future__ import print_function
 
 import json
 import logging
-import datetime
 import os
 
 from batch_api import run_batch
@@ -17,6 +16,7 @@ from breakdown_api import run_breakdown
 from utils import (
     fail_with_message,
     succeed_with_message,
+    TimeLogger,
 )
 from storage_utils import (
     ClaimsClient,
@@ -47,38 +47,36 @@ def _configure_logging(logger, log_level):
 
 
 def _run_calculator(run_options, aws_options):
-    start_time = datetime.datetime.now()
-    logger.info('Clock started at {}'.format(str(start_time)))
-
     configs = ConfigInfo(CONFIG_FILE_NAME)
     _configure_logging(logger, configs.log_level)
 
-    claims_client = ClaimsClient(aws_options)
+    with TimeLogger(logger,
+                    start_message='Clock started at {time}.',
+                    end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)'):
+        # Setup clients to load claims and benefits:
+        claims_client = ClaimsClient(aws_options)
 
-    if configs.use_s3_for_benefits:
-        benefits_client = BenefitsClient(aws_options)
+        if configs.use_s3_for_benefits:
+            benefits_client = BenefitsClient(aws_options)
 
-    else:
-        benefits_client = DummyBenefitsClient()
+        else:
+            benefits_client = DummyBenefitsClient()
 
-    service = run_options['service']
-    if service == 'batch':
-        uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
-                        configs.costs_table, aws_options)
-        result = succeed_with_message('batch calculation complete for {}'.format(uid))
+        service = run_options['service']
+        if service == 'batch':
+            uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
+                            configs.costs_table, aws_options)
+            result = succeed_with_message('batch calculation complete for {}'.format(uid))
 
-    elif service == 'breakdown':
-        costs = run_breakdown(claims_client, benefits_client, configs.claims_year, run_options)
-        result = succeed_with_message(costs)
+        elif service == 'breakdown':
+            costs = run_breakdown(claims_client, benefits_client, configs.claims_year, run_options)
+            result = succeed_with_message(costs)
 
-    else:
-        result = fail_with_message('Unrecognized service: {}'.format(service))
-
-    end_time = datetime.datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
-    logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_time), str(elapsed)))
+        else:
+            result = fail_with_message('Unrecognized service: {}'.format(service))
 
     return result
+
 
 def lambda_handler(event, context):
     """

@@ -1,3 +1,6 @@
+import datetime
+
+
 def succeed_with_message(message):
     return {
         'StatusCode': 200,
@@ -20,7 +23,39 @@ def filter_and_sort_claims(claims, claim_year, start_month):
     # the spark calculator) uses `discharged`, so using `discharged` for consistency.
     filtered_claims = [claim for claim in claims if start_date <= claim['discharged'] <= end_date]
 
-    # TODO: should we short claims by admitted????
-    # return sorted(filtered_claims, key=lambda claim: claim['admitted'])
-
     return filtered_claims
+
+
+class TimeLogger(object):
+    __slots__ = (
+        '_logger',
+        '_start_message',
+        '_end_message',
+        '_start_time',
+    )
+
+    def __init__(self, logger, end_message='', start_message=''):
+        """
+        Use {time} and {elapsed} to capture the current time and time elapsed. {elapsed} is
+        only meaningful for the end_message.
+        """
+        self._logger = logger
+        self._start_message = start_message
+        self._end_message = end_message
+
+    def __enter__(self):
+        self._start_time = datetime.datetime.now()
+
+        if self._start_message:
+            self._logger.info(self._start_message.format(time=self._start_time))
+
+        return self._start_time
+
+    # TODO: introduce better error handling?
+    def __exit__(self, exception_type, exception_value, traceback):
+        time = datetime.datetime.now()
+        elapsed = (time - self._start_time).total_seconds()
+
+        if self._end_message:
+            self._logger.info(self._end_message.format(time=time, elapsed=elapsed))
+
