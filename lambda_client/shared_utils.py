@@ -23,6 +23,40 @@ _MAX_THREADS = 100
 logger = logging.getLogger()
 
 
+class TimeLogger(object):
+    __slots__ = (
+        '_logger',
+        '_start_message',
+        '_end_message',
+        '_start_time',
+    )
+
+    def __init__(self, logger, end_message='', start_message=''):
+        """
+        Use {time} and {elapsed} to capture the current time and time elapsed. {elapsed} is
+        only meaningful for the end_message.
+        """
+        self._logger = logger
+        self._start_message = start_message
+        self._end_message = end_message
+
+    def __enter__(self):
+        self._start_time = datetime.datetime.now()
+
+        if self._start_message:
+            self._logger.info(self._start_message.format(time=self._start_time))
+
+        return self._start_time
+
+    # TODO: introduce better error handling?
+    def __exit__(self, exception_type, exception_value, traceback):
+        time = datetime.datetime.now()
+        elapsed = (time - self._start_time).total_seconds()
+
+        if self._end_message:
+            self._logger.info(self._end_message.format(time=time, elapsed=elapsed))
+
+
 class ThreadPool(object):
     """
     Alternative implementation of multiprocessing.pool.ThreadPool for AWS Lambda. We
@@ -44,46 +78,40 @@ class ThreadPool(object):
     def __init__(self, processes=None):
         self._processes = multiprocessing.cpu_count() if processes is None else processes
 
-    def map(self, fun, sequence):
-        start = datetime.datetime.now()
+    def imap(self, fun, sequence):
+        with TimeLogger(logger,
+                        end_message='Thread initialization took {elapsed} seconds.'):
+            queue = Queue.Queue()
+            threads = []
+            for index, value in enumerate(sequence):
+                # Limit the number of active threads to manage the number of open files:
+                while threading.active_count() >= self._processes:
+                    time.sleep(ThreadPool._DELAY)
 
-        queue = Queue.Queue()
-        threads = []
-        for index, value in enumerate(sequence):
-            # Limit the number of active threads to manage the number of open files:
-            while threading.active_count() >= self._processes:
-                time.sleep(ThreadPool._DELAY)
-
-            t = threading.Thread(target=lambda q, i, v: q.put([index, fun(v)]),
-                                 args=(queue, index, value))
-            threads.append(t)
-            t.start()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to start all threads.'.format(time_elapsed))
+                t = threading.Thread(target=lambda q, i, v: q.put([index, fun(v)]),
+                                     args=(queue, index, value))
+                threads.append(t)
+                t.start()
 
         # Wait for all threads to finish:
-        start = datetime.datetime.now()
-
-        for t in threads:
-            t.join()
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to join all threads.'.format(time_elapsed))
+        with TimeLogger(logger,
+                        end_message='Joining all threads took {elapsed} seconds.'):
+            for t in threads:
+                t.join()
 
         # Combine all the results:
-        start = datetime.datetime.now()
-
-        pairs = []  # (index, return value) pairs
-        while not queue.empty():
-            pairs.append(queue.get())
-        sorted_pairs = sorted(pairs, key=lambda pair: pair[0])
-
-        time_elapsed = (datetime.datetime.now() - start).total_seconds()
-        logger.info('{} seconds to combine results for get_by_state().'.format(time_elapsed))
+        with TimeLogger(logger,
+                        end_message='Combining all results took {elapsed} seconds.'):
+            pairs = []  # (index, return value) pairs
+            while not queue.empty():
+                pairs.append(queue.get())
+            sorted_pairs = sorted(pairs, key=lambda pair: pair[0])
 
         for index, value in sorted_pairs:
             yield value
+
+    def map(self, fun, sequence):
+        return list(self.imap(fun, sequence))
 
 
 def _json_from_s3(s3_bucket, s3_path, resource):
@@ -173,9 +201,9 @@ class ClaimsClient(object):
         pool = ThreadPool(processes=_MAX_THREADS)
 
         if self.use_s3:
-            return list(pool.map(lambda uid: self._get_from_s3(uid), uids))
+            return pool.map(lambda uid: self._get_from_s3(uid), uids)
         else:
-            return list(pool.map(lambda uid: self._get_from_dynamodb(uid), uids))
+            return pool.map(lambda uid: self._get_from_dynamodb(uid), uids)
 
 
 class BenefitsClient(object):
@@ -224,7 +252,7 @@ class BenefitsClient(object):
         pool = ThreadPool(processes=_MAX_THREADS)
 
         # Each call can return plans:
-        plans = pool.map(lambda state: self._get_one_state(state), states)
+        plans = pool.imap(lambda state: self._get_one_state(state), states)
 
         # Combine and return:
         return sum(plans, [])
@@ -241,38 +269,3 @@ class BenefitsClient(object):
 
     def get_all(self):
         return self.get_by_state(self.all_states)
-
-
-class TimeLogger(object):
-    __slots__ = (
-        '_logger',
-        '_start_message',
-        '_end_message',
-        '_start_time',
-    )
-
-    def __init__(self, logger, end_message='', start_message=''):
-        """
-        Use {time} and {elapsed} to capture the current time and time elapsed. {elapsed} is
-        only meaningful for the end_message.
-        """
-        self._logger = logger
-        self._start_message = start_message
-        self._end_message = end_message
-
-    def __enter__(self):
-        self._start_time = datetime.datetime.now()
-
-        if self._start_message:
-            self._logger.info(self._start_message.format(time=self._start_time))
-
-        return self._start_time
-
-    # TODO: introduce better error handling?
-    def __exit__(self, exception_type, exception_value, traceback):
-        time = datetime.datetime.now()
-        elapsed = (time - self._start_time).total_seconds()
-
-        if self._end_message:
-            self._logger.info(self._end_message.format(time=time, elapsed=elapsed))
-
