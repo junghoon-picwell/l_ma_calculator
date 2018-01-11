@@ -1,10 +1,13 @@
-from datetime import datetime
+import datetime
+import logging
 
 from calc.calculator import calculate_oop
 from utils import (
-    succeed_with_message,
+    fail_with_message,
     filter_and_sort_claims,
 )
+
+logger = logging.getLogger()
 
 
 def _calculate_breakdown(person, plans, claim_year, month):
@@ -27,20 +30,46 @@ def _calculate_breakdown(person, plans, claim_year, month):
     return costs
 
 
-def run_breakdown(person, benefits_client, claim_year, run_options, logger, start_time):
-    plans = benefits_client.get_by_pid(run_options['pids'])
+def run_breakdown(claims_client, benefits_client, claim_year, run_options):
+    if 'uid' not in run_options:
+        return {
+            'statusCode': '400',
+            'message': 'missing "uid"',
+        }
+    uid = run_options['uid']
 
     # Use the full year if the proration period is not specified:
     month = str(run_options.get('month', 1)).zfill(2)
 
-    setup_elapsed = (datetime.now() - start_time).total_seconds()
-    logger.info('Total setup took {} seconds.'.format(setup_elapsed) +
-                'Start calculation to return full calculation results:')
+    # look up claims:
+    logger.info('Retrieving claims for {}...'.format(uid))
+    claim_time = datetime.datetime.now()
+
+    try:
+        # TODO: the claims need to be infalted!
+        person = claims_client.get([uid])[0]
+
+    except Exception as e:
+        logger.error(e.message)
+        return fail_with_message(e.message)
+
+    claim_elapsed = (datetime.datetime.now() - claim_time).total_seconds()
+    logger.info('Finished retrieving claims for {} in {} seconds.'.format(uid, claim_elapsed))
+
+    # look up plans from s3
+    logger.info('Retrieving benefits...')
+    benefit_time = datetime.datetime.now()
+
+    try:
+        plans = benefits_client.get_by_pid(run_options['pids'])
+
+    except Exception as e:
+        logger.error(e.message)
+        return fail_with_message(e.message)
+
+    benefit_elapsed = (datetime.datetime.now() - benefit_time).total_seconds()
+    logger.info('Retrieved benefits in {} seconds.'.format(benefit_elapsed))
 
     costs = _calculate_breakdown(person, plans, claim_year, month)
 
-    end_time = datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
-    logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_time), str(elapsed)))
-
-    return succeed_with_message(costs)
+    return costs

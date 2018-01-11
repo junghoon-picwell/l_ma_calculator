@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import json
 import logging
-from datetime import datetime
+import datetime
 import os
 
 from batch_api import run_batch
@@ -16,6 +16,7 @@ from config_info import (
 from breakdown_api import run_breakdown
 from utils import (
     fail_with_message,
+    succeed_with_message,
 )
 from storage_utils import (
     ClaimsClient,
@@ -45,67 +46,39 @@ def _configure_logging(logger, log_level):
         logger.setLevel(logging.ERROR)
 
 
-def main(run_options, aws_options):
+def _run_calculator(run_options, aws_options):
+    start_time = datetime.datetime.now()
+    logger.info('Clock started at {}'.format(str(start_time)))
+
     configs = ConfigInfo(CONFIG_FILE_NAME)
     _configure_logging(logger, configs.log_level)
 
-    start_time = datetime.now()
-    logger.info('Clock started at {}'.format(str(start_time)))
+    claims_client = ClaimsClient(aws_options)
 
-    if 'uid' not in run_options:
-        return {
-            'statusCode': '400',
-            'message': 'missing "uid"',
-        }
-    uid = run_options['uid']
+    if configs.use_s3_for_benefits:
+        benefits_client = BenefitsClient(aws_options)
 
-    # look up claims:
-    logger.info('Retrieving claims for {}...'.format(uid))
-    claim_time = datetime.now()
-
-    try:
-        # TODO: the claims need to be infalted!
-        claims_client = ClaimsClient(aws_options)
-        person = claims_client.get([uid])[0]
-
-    except Exception as e:
-        logger.error(e.message)
-        return fail_with_message(e.message)
-
-    claim_elapsed = (datetime.now() - claim_time).total_seconds()
-    logger.info('Finished retrieving claims for {} in {} seconds.'.format(uid, claim_elapsed))
-
-    # look up plans from s3
-    logger.info('Retrieving benefits file...')
-    benefit_time = datetime.now()
-
-    try:
-        if configs.use_s3_for_benefits:
-            benefits_client = BenefitsClient(aws_options)
-
-        else:
-            benefits_client = DummyBenefitsClient()
-
-    except Exception as e:
-        logger.error(e.message)
-        return fail_with_message(e.message)
-
-    benefit_elapsed = (datetime.now() - benefit_time).total_seconds()
-    logger.info('Finished retrieving benefits file in {} seconds.'.format(benefit_elapsed))
+    else:
+        benefits_client = DummyBenefitsClient()
 
     service = run_options['service']
     if service == 'batch':
-        return run_batch(person, benefits_client, configs.claims_year, run_options,
-                         configs.costs_table, aws_options,
-                         logger, start_time)
+        uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
+                        configs.costs_table, aws_options)
+        result = succeed_with_message('batch calculation complete for {}'.format(uid))
 
     elif service == 'breakdown':
-        return run_breakdown(person, benefits_client, configs.claims_year, run_options,
-                             logger, start_time)
+        costs = run_breakdown(claims_client, benefits_client, configs.claims_year, run_options)
+        result = succeed_with_message(costs)
 
     else:
-        return fail_with_message('Unrecognized service: {}'.format(service))
+        result = fail_with_message('Unrecognized service: {}'.format(service))
 
+    end_time = datetime.datetime.now()
+    elapsed = (end_time - start_time).total_seconds()
+    logger.info('Clock stopped at {}. Elapsed: {}'.format(str(end_time), str(elapsed)))
+
+    return result
 
 def lambda_handler(event, context):
     """
@@ -123,7 +96,7 @@ def lambda_handler(event, context):
         'region_name': 'us-east-1',
     }
     operations = {
-        'GET': lambda run_options: main(run_options, aws_options)
+        'GET': lambda run_options: _run_calculator(run_options, aws_options)
     }
 
     operation = event['httpMethod']
@@ -162,7 +135,7 @@ if __name__ == '__main__':
 
     print('BATCH RUN')
     print()
-    print(main(run_options, aws_options))
+    print(_run_calculator(run_options, aws_options))
     print()
 
     run_options = {
@@ -175,4 +148,4 @@ if __name__ == '__main__':
 
     print('BREAKDOWN RUN')
     print()
-    print(main(run_options, aws_options))
+    print(_run_calculator(run_options, aws_options))
