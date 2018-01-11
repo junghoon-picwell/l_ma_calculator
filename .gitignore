@@ -4,6 +4,7 @@
 *.pyc
 
 # Code shared between client and Lambda package
+lambda_package/VERSION
 lambda_package/lambda.cfg
 lambda_package/config_info.py
 lambda_package/shared_utils.py

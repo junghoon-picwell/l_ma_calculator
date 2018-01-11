@@ -20,6 +20,7 @@ ver :
 	ECHO $(VIRTUAL_ENV)
 
 package : clean
+	cp $(HERE)/VERSION $(TAR_DIR)
 	cp $(SRC_DIR)/lambda.cfg $(TAR_DIR)
 	cp $(SRC_DIR)/config_info.py $(TAR_DIR)
 	cp $(SRC_DIR)/shared_utils.py $(TAR_DIR)
@@ -37,6 +38,7 @@ clean :
 	[ -d $(LIB_DIR) ] && rm -rf $(LIB_DIR) && (rm -rf $(HERE)/build/* || true) || true
 
 	# Files shared by client and lambda package:
+	[ -f $(TAR_DIR)/VERSION ] && rm $(TAR_DIR)/VERSION || true
 	[ -f $(TAR_DIR)/lambda.cfg ] && rm $(TAR_DIR)/lambda.cfg || true
 	[ -f $(TAR_DIR)/config_info.py ] && rm $(TAR_DIR)/config_info.py || true
 	[ -f $(TAR_DIR)/shared_utils.py ] && rm $(TAR_DIR)/shared_utils.py || true
