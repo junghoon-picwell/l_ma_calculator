@@ -19,6 +19,12 @@ import time
 
 from etltools import s3
 
+from lambda_client import (
+    ClaimsClient,
+    BenefitsClient,
+    CalculatorClient,
+)
+
 reload(logging)  # get around notebook problem
 
 
@@ -80,11 +86,6 @@ print all_states
 
 # In[ ]:
 
-from lambda_client import ClaimsClient
-
-
-# In[ ]:
-
 # Test S3:
 client = ClaimsClient(aws_info, 
                       s3_bucket=configs.claims_bucket,
@@ -138,11 +139,6 @@ with pytest.raises(Exception, match='ClaimsClient object cannot be pickled.'):
 
 
 # # Test BenefitsClient
-
-# In[ ]:
-
-from lambda_client import BenefitsClient
-
 
 # In[ ]:
 
@@ -206,12 +202,10 @@ with pytest.raises(Exception, match='BenefitsClient object cannot be pickled.'):
 
 # In[6]:
 
-from lambda_client import CalculatorClient
-
 client = CalculatorClient(aws_info)
 
 
-# In[8]:
+# In[7]:
 
 responses = client.get_breakdown(uids[:1], pids, verbose=True)
 
@@ -219,41 +213,47 @@ print '{} responses returned'.format(len(responses))
 responses[0]
 
 
-# In[ ]:
+# In[8]:
 
-# It seems like
-#
-# (a) the time it takes to issue threads increases linearly; and
-# (b) the time it takes for the last thread to finish is about 5 seconds all the time. 
-for num_people in range(2, 15):
-    start = datetime.datetime.now()
-    responses = client.get_breakdown(uids[:num_people], pids)
-    elapsed = (datetime.datetime.now() - start).total_seconds()
+# Test recursive call:
+responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
 
-    print '{} responses returned ({} seconds)'.format(len(responses), elapsed)
+print '{} responses returned'.format(len(responses))
 
 
 # In[9]:
 
-# Test recursive call:
-responses = client.get_breakdown(uids[:10], pids, max_uids_to_calculate=10, verbose=True)
+responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=3)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[14]:
+# In[10]:
 
-responses = client.get_breakdown(uids[:10], pids, max_uids_to_calculate=1, max_lambda_calls=3, verbose=True)
+responses = client.get_breakdown(uids[:10], pids)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[27]:
+# In[25]:
+
+responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[32]:
 
 # Let's try something larger:
-responses = client.get_breakdown(uids, pids, max_uids_to_calculate=1, max_lambda_calls=10)
+responses = client.get_breakdown(uids, pids)
 
 print '{} responses returned'.format(len(responses))
+
+
+# In[28]:
+
+# unique_uids = {cost['uid'] for cost in responses}
+# len(unique_uids)
 
 
 # In[ ]:
@@ -283,10 +283,19 @@ for person in people:
 print '{} costs calculated'.format(len(costs))
 
 
-# In[38]:
+# In[ ]:
+
+# benefits_client = BenefitsClient()
+# plans_CA = benefits_client.get_by_state(['06'])
+# pids_CA = [plan['picwell_id'] for plan in plans_CA]
+
+# print '{} plans identified'.format(len(pids_CA))
+
+
+# In[33]:
 
 # Try a sample size more relevant to commercial:
-responses = client.get_breakdown(uids[:300], pids, max_uids_to_calculate=1, max_lambda_calls=10)
+responses = client.get_breakdown(uids[:300], pids)
 
 print '{} responses returned'.format(len(responses))
 

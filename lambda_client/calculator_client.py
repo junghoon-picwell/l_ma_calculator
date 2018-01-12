@@ -25,7 +25,7 @@ class CalculatorClient(object):
 
     # TODO: improve error handling with threading.Thread since some threads can fail.
     def get_breakdown(self, uids, pids, month='01',
-                      max_uids_to_calculate=None, max_lambda_calls=None,
+                      max_calculated_uids=None, max_lambda_calls=None,
                       verbose=False):
         request = {
             'httpMethod': 'GET',
@@ -36,8 +36,8 @@ class CalculatorClient(object):
                 'month': month,
             }
         }
-        if max_uids_to_calculate is not None:
-            request['queryStringParameters']['max_uids_to_calculate'] = max_uids_to_calculate
+        if max_calculated_uids is not None:
+            request['queryStringParameters']['max_calculated_uids'] = max_calculated_uids
         if max_lambda_calls is not None:
             request['queryStringParameters']['max_lambda_calls'] = max_lambda_calls
 

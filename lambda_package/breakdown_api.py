@@ -1,6 +1,8 @@
 import boto3
 import json
 import logging
+import random
+import time
 
 from calc.calculator import calculate_oop
 from package_utils import (
@@ -13,9 +15,12 @@ from shared_utils import (
     TimeLogger,
 )
 
+_MAX_RETRIES = 7
+_RETRY_DELAY = 0.1
+
 # Both should be less than MAX_THREADS used for ThreadPool:
-_MAX_UIDS_TO_CALCULATE = min(10, MAX_THREADS)
-_MAX_LAMBDA_CALLS = min(20, MAX_THREADS)
+_MAX_CALCULATED_UIDS = min(1, MAX_THREADS)
+_MAX_LAMBDA_CALLS = min(10, MAX_THREADS)
 
 logger = logging.getLogger()
 
@@ -41,16 +46,16 @@ def _calculate_breakdown(people, plans, claim_year, month):
     return costs
 
 
-def _distribute_uids(uids, max_uids_to_calculate, max_lambda_calls):
+def _distribute_uids(uids, max_calculated_uids, max_lambda_calls):
     # TODO: there may be a better way to do this:
-    if len(uids) < max_uids_to_calculate*max_lambda_calls:
+    if len(uids) < max_calculated_uids*max_lambda_calls:
         # Try to minimize AWS Lambda calls:
-        return (uids[start:(start + max_uids_to_calculate)]
-                for start in xrange(0, len(uids), max_uids_to_calculate))
+        return [uids[start:(start + max_calculated_uids)]
+                for start in xrange(0, len(uids), max_calculated_uids)]
 
     else:
         # Distribute the uids into max_lambda_call "buckets":
-        return (uids[start::max_lambda_calls] for start in range(max_lambda_calls))
+        return [uids[start::max_lambda_calls] for start in range(max_lambda_calls)]
 
 
 def _call_itself(uids, run_options):
@@ -63,20 +68,34 @@ def _call_itself(uids, run_options):
     client = boto3.client('lambda')
 
     encoded_payload = bytes(json.dumps(request)).encode('utf-8')
-    response = client.invoke(
-        FunctionName='ma_calculator',
-        InvocationType='RequestResponse',
-        LogType='None',
-        Payload=encoded_payload,
-    )
 
-    # Only collect successful calculations:
-    if response['StatusCode'] == 200:
-        calculator_response = json.loads(response['Payload'].read())
-        if calculator_response['StatusCode'] == 200:
-            return calculator_response['Return']
+    retries = 0
+    while retries < _MAX_RETRIES:
+        response = client.invoke(
+            FunctionName='ma_calculator',
+            InvocationType='RequestResponse',
+            LogType='None',
+            Payload=encoded_payload,
+        )
 
-    return []
+        if response['StatusCode'] == 200:
+            calculator_response = json.loads(response['Payload'].read())
+            if calculator_response['StatusCode'] == 200:
+                break
+
+        retries += 1
+
+        # No delay is needed for the last iteration:
+        if retries < _MAX_RETRIES:
+            # Exponential delay:
+            max_sleep_time = 2.0 ** retries / 100.0  # start with 20 ms delay
+            time.sleep(random.uniform(0, max_sleep_time))
+
+    if retries < _MAX_RETRIES:
+        return calculator_response['Return']
+    else:
+        # Give up a few people after maximum number of retires:
+        return []
 
 
 def run_breakdown(claims_client, benefits_client, claim_year, run_options):
@@ -86,18 +105,20 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
         'uids': List[UID],
         'pids': List[PID],
         'months': 2-digit string (optional),
-        'max_uids_to_calculate': int (optional),
+        'max_calculated_uids': int (optional),
         'max_lambda_calls: int (optional),
     }
     """
     if 'uids' not in run_options:
-        return message_failure('Missing "uids".')
+        raise Exception('Missing "uids".')
     uids = run_options['uids']
 
-    max_uids_to_calculate = run_options.get('max_uids_to_calculate', _MAX_UIDS_TO_CALCULATE)
-    if len(uids) > max_uids_to_calculate:
+    max_calculated_uids = run_options.get('max_calculated_uids', _MAX_CALCULATED_UIDS)
+    if len(uids) > max_calculated_uids:
         max_lambda_calls = run_options.get('max_lambda_calls', _MAX_LAMBDA_CALLS)
-        uid_groups = _distribute_uids(uids, max_uids_to_calculate, max_lambda_calls)
+        uid_groups = _distribute_uids(uids, max_calculated_uids, max_lambda_calls)
+
+        logger.info('{} uids are broken into {} groups'.format(len(uids), len(uid_groups)))
 
         with TimeLogger(logger,
                         end_message='Distribution took {elapsed} seconds.'):
@@ -108,7 +129,7 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
 
     else:
         if 'pids' not in run_options:
-            return message_failure('Missing "pids".')
+            raise Exception('Missing "pids".')
         pids = run_options['pids']
 
         # Use the full year if the proration period is not specified:
@@ -117,23 +138,13 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
         # look up claims:
         message = 'Claim retrieval for {}'.format(uids) + ' took {elapsed} seconds.'
         with TimeLogger(logger, end_message=message):
-            try:
-                # TODO: the claims need to be infalted!
-                people = claims_client.get(uids)
-
-            except Exception as e:
-                logger.error(e.message)
-                return message_failure(e.message)
+            # TODO: the claims need to be infalted!
+            people = claims_client.get(uids)
 
         # look up plans from s3
         with TimeLogger(logger,
                         end_message='Benefit retrieval took {elapsed} seconds.'):
-            try:
-                plans = benefits_client.get_by_pid(pids)
-
-            except Exception as e:
-                logger.error(e.message)
-                return message_failure(e.message)
+            plans = benefits_client.get_by_pid(pids)
 
         with TimeLogger(logger,
                         end_message='Calculation took {elapsed} seconds.'):

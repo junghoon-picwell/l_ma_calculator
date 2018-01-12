@@ -44,7 +44,7 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
     }
     """
     if 'uid' not in run_options:
-        return message_failure('Missing "uid".')
+        raise Exception('Missing "uid".')
     uid = run_options['uid']
 
     # Read states and propration periods to consider. If not given use default values (all
@@ -57,13 +57,7 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
     # look up claims:
     message = 'Claim retrieval for {}'.format(uid) + ' took {elapsed} seconds.'
     with TimeLogger(logger, end_message=message):
-        try:
-            # TODO: the claims need to be infalted!
-            person = claims_client.get([uid])[0]
-
-        except Exception as e:
-            logger.error(e.message)
-            return message_failure(e.message)
+        person = claims_client.get([uid])[0]
 
     with TimeLogger(logger,
                     end_message='Establishing connection to DynamoDB took {elapsed} seconds.'):
@@ -76,12 +70,7 @@ def run_batch(claims_client, benefits_client, claim_year, run_options, table_nam
         # look up plans from s3
         message = 'Benefit retrieval for {}'.format(state) + ' took {elapsed} seconds.'
         with TimeLogger(logger, end_message=message):
-            try:
-                plans = benefits_client.get_by_state([state])
-
-            except Exception as e:
-                logger.error(e.message)
-                return message_failure(e.message)
+            plans = benefits_client.get_by_state([state])
 
         if plans:
             message = 'Calculation for {}'.format(state) + ' took {elapsed} seconds.'

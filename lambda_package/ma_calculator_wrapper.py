@@ -64,17 +64,26 @@ def _run_calculator(run_options, aws_options):
 
         service = run_options['service']
         if service == 'batch':
-            uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
-                            configs.costs_table, aws_options)
+            try:
+                uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
+                                configs.costs_table, aws_options)
 
-            message = 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
-            result = message_success(message)
+                message = 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
+                result = message_success(message)
+
+            except Exception as e:
+                result = message_failure(e.message)
 
         elif service == 'breakdown':
-            costs = run_breakdown(claims_client, benefits_client, configs.claims_year, run_options)
+            try:
+                costs = run_breakdown(claims_client, benefits_client, configs.claims_year,
+                                      run_options)
 
-            message = 'Cost breakdown complete (elapsed: {} seconds).'.format(tl.elapsed)
-            result = message_success(message, costs)
+                message = 'Cost breakdown complete (elapsed: {} seconds).'.format(tl.elapsed)
+                result = message_success(message, costs)
+
+            except Exception as e:
+                result = message_failure(e.message)
 
         else:
             result = message_failure('Unrecognized service: {}'.format(service))
