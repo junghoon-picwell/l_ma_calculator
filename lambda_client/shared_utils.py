@@ -18,7 +18,7 @@ from config_info import (
 )
 
 # This limits opening too many files:
-_MAX_THREADS = 100
+MAX_THREADS = 100
 
 logger = logging.getLogger()
 
@@ -205,7 +205,7 @@ class ClaimsClient(object):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=_MAX_THREADS)
+        pool = ThreadPool(processes=MAX_THREADS)
 
         if self.use_s3:
             return pool.map(lambda uid: self._get_from_s3(uid), uids)
@@ -256,7 +256,7 @@ class BenefitsClient(object):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=_MAX_THREADS)
+        pool = ThreadPool(processes=MAX_THREADS)
 
         # Each call can return plans:
         plans = pool.imap(lambda state: self._get_one_state(state), states)

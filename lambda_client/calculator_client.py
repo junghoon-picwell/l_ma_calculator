@@ -23,24 +23,30 @@ class CalculatorClient(object):
     def __getstate__(self):
         raise Exception('CalculatorClient object cannot be pickled')
 
-    def _get_one_breakdown(self, uid, pids, month, verbose):
+    # TODO: improve error handling with threading.Thread since some threads can fail.
+    def get_breakdown(self, uids, pids, month='01',
+                      max_uids_to_calculate=None, max_lambda_calls=None,
+                      verbose=False):
         request = {
             'httpMethod': 'GET',
             'queryStringParameters': {
                 'service': 'breakdown',
-                'uid': uid,
+                'uids': uids,
                 'pids': pids,
                 'month': month,
             }
         }
-
-        encoded_payload = bytes(json.dumps(request)).encode('utf-8')
+        if max_uids_to_calculate is not None:
+            request['queryStringParameters']['max_uids_to_calculate'] = max_uids_to_calculate
+        if max_lambda_calls is not None:
+            request['queryStringParameters']['max_lambda_calls'] = max_lambda_calls
 
         # boto3 is not thread safe:
         # http://boto3.readthedocs.io/en/latest/guide/resources.html#multithreading-multiprocessing
         session = boto3.Session(**self._aws_info)
         client = session.client('lambda')
 
+        encoded_payload = bytes(json.dumps(request)).encode('utf-8')
         response = client.invoke(
             FunctionName='ma_calculator',
             InvocationType=InvocationType.RequestResponse,
@@ -61,16 +67,3 @@ class CalculatorClient(object):
                 if verbose:
                     print calculator_response['Message']
                 return calculator_response['Return']
-
-    # TODO: improve error handling with threading.Thread since some threads can fail.
-    def get_breakdown(self, uids, pids, month='01', verbose=False):
-        # Issue a thread for each person:
-        #
-        # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=_MAX_THREADS)
-
-        # Each call can return costs for multiple plans:
-        costs = pool.map(lambda uid: self._get_one_breakdown(uid, pids, month, verbose), uids)
-
-        # Combine all costs and return:
-        return sum(costs, [])

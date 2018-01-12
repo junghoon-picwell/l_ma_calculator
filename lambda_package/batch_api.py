@@ -36,11 +36,15 @@ def _calculate_batch(person, plans, claim_year, fips_code, months):
 
 
 def run_batch(claims_client, benefits_client, claim_year, run_options, table_name, aws_options):
+    """
+    {
+        'uid': string,
+        'states': List[2-digit strings] (optional),
+        'months': List[2-digit strings] (optional),
+    }
+    """
     if 'uid' not in run_options:
-        return {
-            'statusCode': '400',
-            'message': 'missing "uid"',
-        }
+        return message_failure('Missing "uid".')
     uid = run_options['uid']
 
     # Read states and propration periods to consider. If not given use default values (all
