@@ -4,7 +4,6 @@ from calc.calculator import calculate_oop
 from cost_map import DynamoDBCostMap
 from package_utils import (
     filter_and_sort_claims,
-    message_failure,
 )
 from shared_utils import TimeLogger
 

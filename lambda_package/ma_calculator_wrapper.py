@@ -13,10 +13,6 @@ from config_info import (
     ConfigInfo,
 )
 from breakdown_api import run_breakdown
-from package_utils import (
-    message_failure,
-    message_success,
-)
 from shared_utils import (
     ClaimsClient,
     BenefitsClient,
@@ -64,31 +60,23 @@ def _run_calculator(run_options, aws_options):
 
         service = run_options['service']
         if service == 'batch':
-            try:
-                uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
-                                configs.costs_table, aws_options)
+            uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
+                            configs.costs_table, aws_options)
 
-                message = 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
-                result = message_success(message)
-
-            except Exception as e:
-                result = message_failure(e.message)
+            return 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
 
         elif service == 'breakdown':
-            try:
-                costs = run_breakdown(claims_client, benefits_client, configs.claims_year,
-                                      run_options)
-
-                message = 'Cost breakdown complete (elapsed: {} seconds).'.format(tl.elapsed)
-                result = message_success(message, costs)
-
-            except Exception as e:
-                result = message_failure(e.message)
+            return run_breakdown(claims_client, benefits_client, configs.claims_year,
+                                 run_options)
 
         else:
-            result = message_failure('Unrecognized service: {}'.format(service))
-
-    return result
+            # Since Lambdas are directly called, instead of through the API gateway,
+            # exceptions are raised directly. This will still result in a 200 StatusCode,
+            # but the response will include FunctionError field.
+            #
+            # See
+            # https://docs.aws.amazon.com/lambda/latest/dg/API_Invoke.html
+            raise Exception('Unrecognized service: {}'.format(service))
 
 
 def lambda_handler(event, context):
@@ -118,7 +106,13 @@ def lambda_handler(event, context):
         return operations[operation](payload)
 
     else:
-        return message_failure('Unsupported method "{}"'.format(operation))
+        # Since Lambdas are directly called, instead of through the API gateway,
+        # exceptions are raised directly. This will still result in a 200 StatusCode,
+        # but the response will include FunctionError field.
+        #
+        # See
+        # https://docs.aws.amazon.com/lambda/latest/dg/API_Invoke.html
+        raise Exception('Unsupported method "{}"'.format(operation))
 
 
 if __name__ == '__main__':

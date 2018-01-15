@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 
-import json
+import base64
 import boto3
+import json
 import logging
 
 # from multiprocessing.pool import ThreadPool
@@ -50,20 +51,20 @@ class CalculatorClient(object):
         response = client.invoke(
             FunctionName='ma_calculator',
             InvocationType=InvocationType.RequestResponse,
-            LogType='None',
+            LogType='Tail' if verbose else 'None',
             Payload=encoded_payload,
         )
 
-        # TODO: improve the error message when AWS specifies StatusCode != 200
         if response['StatusCode'] != 200:
+            # TODO: it is not clear when this is supposed to happen. Improve the error message when we do.
             raise Exception('Lambda failed for some unknown reason')
 
         else:
-            calculator_response = json.loads(response['Payload'].read())
-            if calculator_response['StatusCode'] != 200:
-                raise Exception(calculator_response['Message'])
+            payload = json.loads(response['Payload'].read())
+            if 'FunctionError' in response:
+                raise Exception(payload['errorMessage'])
 
             else:
                 if verbose:
-                    print calculator_response['Message']
-                return calculator_response['Return']
+                    print base64.b64decode(response['LogResult'])
+                return payload

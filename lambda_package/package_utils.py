@@ -1,18 +1,18 @@
-def message_success(message, value=None):
-    dct = {
-        'StatusCode': 200,
-        'Message': message
-    }
-    if value is not None:
-        dct['Return'] = value
-
-    return dct
-
-
-def message_failure(message):
+def message_api_gateway(status_code, body):
+    # An object of this format should be used when results are returned to the API
+    # gateway when Lambda Proxy is used. Otherwise, the API gateway will issue a
+    # 502 error "malformed Lambda proxy response".
+    #
+    # See
+    # https://aws.amazon.com/premiumsupport/knowledge-center/malformed-502-api-gateway/
+    # https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-create-api-as-simple-proxy-for-lambda.html
     return {
-        'StatusCode': 500,
-        'Message': message
+        'statueCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
+        'isBase64Encoded': False,  # not sure whether this is correct
+        'body': body,
     }
 
 

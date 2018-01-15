@@ -213,22 +213,22 @@ print '{} responses returned'.format(len(responses))
 responses[0]
 
 
-# In[8]:
+# In[14]:
 
 # Test recursive call:
-responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
+responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10, verbose=True)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[9]:
+# In[22]:
 
-responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=3)
+responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2, verbose=True)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[10]:
+# In[23]:
 
 responses = client.get_breakdown(uids[:10], pids)
 
@@ -237,20 +237,13 @@ print '{} responses returned'.format(len(responses))
 
 # In[25]:
 
-responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2)
-
-print '{} responses returned'.format(len(responses))
-
-
-# In[32]:
-
 # Let's try something larger:
 responses = client.get_breakdown(uids, pids)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[28]:
+# In[ ]:
 
 # unique_uids = {cost['uid'] for cost in responses}
 # len(unique_uids)
@@ -292,7 +285,7 @@ print '{} costs calculated'.format(len(costs))
 # print '{} plans identified'.format(len(pids_CA))
 
 
-# In[33]:
+# In[ ]:
 
 # Try a sample size more relevant to commercial:
 responses = client.get_breakdown(uids[:300], pids)

@@ -20,8 +20,8 @@ from config_info import (
 # This limits opening too many files:
 MAX_THREADS = 100
 
-logger = logging.getLogger()
-
+# logger = logging.getLogger()
+logger = None
 
 class TimeLogger(object):
     __slots__ = (
@@ -51,7 +51,7 @@ class TimeLogger(object):
     def __enter__(self):
         self._start_time = datetime.datetime.now()
 
-        if self._start_message:
+        if self._start_message and self._logger is not None:
             self._logger.info(self._start_message.format(time=self._start_time))
 
         return self
@@ -60,7 +60,7 @@ class TimeLogger(object):
     def __exit__(self, exception_type, exception_value, traceback):
         time = datetime.datetime.now()
 
-        if self._end_message:
+        if self._end_message and self._logger is not None:
             self._logger.info(self._end_message.format(time=time, elapsed=self.elapsed))
 
 

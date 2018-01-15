@@ -6,7 +6,6 @@ import time
 
 from calc.calculator import calculate_oop
 from package_utils import (
-    message_failure,
     filter_and_sort_claims,
 )
 from shared_utils import (
@@ -78,10 +77,8 @@ def _call_itself(uids, run_options):
             Payload=encoded_payload,
         )
 
-        if response['StatusCode'] == 200:
-            calculator_response = json.loads(response['Payload'].read())
-            if calculator_response['StatusCode'] == 200:
-                break
+        if response['StatusCode'] == 200 and 'FunctionError' not in response:
+            break
 
         retries += 1
 
@@ -92,9 +89,10 @@ def _call_itself(uids, run_options):
             time.sleep(random.uniform(0, max_sleep_time))
 
     if retries < _MAX_RETRIES:
-        return calculator_response['Return']
+        return json.loads(response['Payload'].read())
     else:
         # Give up a few people after maximum number of retires:
+        logger.info('Giving up after {} retires.'.format(_MAX_RETRIES))
         return []
 
 
@@ -113,6 +111,10 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
         raise Exception('Missing "uids".')
     uids = run_options['uids']
 
+    if 'pids' not in run_options:
+        raise Exception('Missing "pids".')
+    pids = run_options['pids']
+
     max_calculated_uids = run_options.get('max_calculated_uids', _MAX_CALCULATED_UIDS)
     if len(uids) > max_calculated_uids:
         max_lambda_calls = run_options.get('max_lambda_calls', _MAX_LAMBDA_CALLS)
@@ -128,10 +130,6 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
         return sum(cost_groups, [])
 
     else:
-        if 'pids' not in run_options:
-            raise Exception('Missing "pids".')
-        pids = run_options['pids']
-
         # Use the full year if the proration period is not specified:
         month = str(run_options.get('month', 1)).zfill(2)
 
