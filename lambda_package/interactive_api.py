@@ -24,7 +24,7 @@ _MAX_LAMBDA_CALLS = min(10, MAX_THREADS)
 logger = logging.getLogger()
 
 
-def _calculate_breakdown(people, plans, claim_year, month):
+def _run_calculator(people, plans, claim_year, month, oop_only):
     costs = []
     for person in people:
         # TODO: should we inflate claims?
@@ -34,6 +34,8 @@ def _calculate_breakdown(people, plans, claim_year, month):
         for plan in plans:
             cost = calculate_oop(claims_to_process, plan, force_network='in_network',
                                  truncate_claims_at_year_boundary=False)
+            if oop_only:
+                cost = {'oop': cost['oop']}
 
             cost.update({
                 'uid': person['uid'],
@@ -106,7 +108,7 @@ def _call_itself(uids, run_options):
         return []
 
 
-def run_breakdown(claims_client, benefits_client, claim_year, run_options):
+def run_interactive(claims_client, benefits_client, claim_year, run_options, oop_only):
     """
     The run_options looks like
     {
@@ -132,6 +134,7 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
 
         logger.info('{} uids are broken into {} groups'.format(len(uids), len(uid_groups)))
 
+        # TODO: improve error handling with Threading since threads can fail as we have seen above.
         with TimeLogger(logger,
                         end_message='Distribution took {elapsed} seconds.'):
             pool = ThreadPool(MAX_THREADS)
@@ -156,6 +159,6 @@ def run_breakdown(claims_client, benefits_client, claim_year, run_options):
 
         with TimeLogger(logger,
                         end_message='Calculation took {elapsed} seconds.'):
-            costs = _calculate_breakdown(people, plans, claim_year, month)
+            costs = _run_calculator(people, plans, claim_year, month, oop_only)
 
     return costs

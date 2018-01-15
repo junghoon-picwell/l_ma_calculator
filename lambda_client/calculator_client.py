@@ -24,14 +24,12 @@ class CalculatorClient(object):
     def __getstate__(self):
         raise Exception('CalculatorClient object cannot be pickled')
 
-    # TODO: improve error handling with threading.Thread since some threads can fail.
-    def get_breakdown(self, uids, pids, month='01',
-                      max_calculated_uids=None, max_lambda_calls=None,
-                      verbose=False):
+    def _issue_interactive_request(self, service, uids, pids, month,
+                                   max_calculated_uids, max_lambda_calls, verbose):
         request = {
             'httpMethod': 'GET',
             'queryStringParameters': {
-                'service': 'breakdown',
+                'service': service,
                 'uids': uids,
                 'pids': pids,
                 'month': month,
@@ -68,3 +66,15 @@ class CalculatorClient(object):
                 if verbose:
                     print base64.b64decode(response['LogResult'])
                 return payload
+
+    def get_breakdown(self, uids, pids, month='01',
+                      max_calculated_uids=None, max_lambda_calls=None,
+                      verbose=False):
+        return self._issue_interactive_request('breakdown', uids, pids, month,
+                                               max_calculated_uids, max_lambda_calls, verbose)
+
+    def get_oop(self, uids, pids, month='01',
+                max_calculated_uids=None, max_lambda_calls=None,
+                verbose=False):
+        return self._issue_interactive_request('oop', uids, pids, month,
+                                               max_calculated_uids, max_lambda_calls, verbose)

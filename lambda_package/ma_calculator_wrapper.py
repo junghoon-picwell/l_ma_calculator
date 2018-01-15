@@ -12,7 +12,7 @@ from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
-from breakdown_api import run_breakdown
+from interactive_api import run_interactive
 from shared_utils import (
     ClaimsClient,
     BenefitsClient,
@@ -66,8 +66,12 @@ def _run_calculator(run_options, aws_options):
             return 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
 
         elif service == 'breakdown':
-            return run_breakdown(claims_client, benefits_client, configs.claims_year,
-                                 run_options)
+            return run_interactive(claims_client, benefits_client, configs.claims_year,
+                                   run_options, oop_only=False)
+
+        elif service == 'oop':
+            return run_interactive(claims_client, benefits_client, configs.claims_year,
+                                   run_options, oop_only=True)
 
         else:
             # Since Lambdas are directly called, instead of through the API gateway,
