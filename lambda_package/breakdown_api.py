@@ -58,14 +58,24 @@ def _distribute_uids(uids, max_calculated_uids, max_lambda_calls):
 
 
 def _call_itself(uids, run_options):
+    # This can fail. However, I am not sure whether I want to follow the advice in
+    # this post:
+    #
+    # https://github.com/boto/boto3/issues/801
+    #
+    # I think this also shows that boto3 is not really ready for multi-threading.
+    client = None
+    while not client:
+        try:
+            client = boto3.client('lambda')
+        except:
+            client = None
+
     request = {
         'httpMethod': 'GET',
         'queryStringParameters': run_options.copy(),
     }
     request['queryStringParameters']['uids'] = uids
-
-    client = boto3.client('lambda')
-
     encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
     retries = 0

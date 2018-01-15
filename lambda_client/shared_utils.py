@@ -20,8 +20,9 @@ from config_info import (
 # This limits opening too many files:
 MAX_THREADS = 100
 
-# logger = logging.getLogger()
-logger = None
+logger = logging.getLogger()
+# logger = None
+
 
 class TimeLogger(object):
     __slots__ = (
