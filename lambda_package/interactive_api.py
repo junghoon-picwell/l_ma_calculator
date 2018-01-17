@@ -14,8 +14,8 @@ from shared_utils import (
     TimeLogger,
 )
 
-_MAX_RETRIES = 7
-_RETRY_DELAY = 0.1
+_MAX_CLIENT_TRIES = 10
+_MAX_LAMBDA_TRIES = 7
 
 # Both should be less than MAX_THREADS used for ThreadPool:
 _MAX_CALCULATED_UIDS = min(1, MAX_THREADS)
@@ -67,11 +67,18 @@ def _call_itself(uids, run_options):
     #
     # I think this also shows that boto3 is not really ready for multi-threading.
     client = None
-    while not client:
+    tries = 0
+    while not client and tries < _MAX_CLIENT_TRIES:
         try:
             client = boto3.client('lambda')
-        except:
-            client = None
+        except KeyError:
+            pass
+
+        tries += 1
+
+    if not client:
+        logger.info('Boto3 client cannot be created even after {} tries.'.format(_MAX_CLIENT_TRIES))
+        return []
 
     request = {
         'httpMethod': 'GET',
@@ -80,8 +87,8 @@ def _call_itself(uids, run_options):
     request['queryStringParameters']['uids'] = uids
     encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
-    retries = 0
-    while retries < _MAX_RETRIES:
+    tries = 0
+    while tries < _MAX_LAMBDA_TRIES:
         response = client.invoke(
             FunctionName='ma_calculator',
             InvocationType='RequestResponse',
@@ -92,19 +99,23 @@ def _call_itself(uids, run_options):
         if response['StatusCode'] == 200 and 'FunctionError' not in response:
             break
 
-        retries += 1
+        tries += 1
 
         # No delay is needed for the last iteration:
-        if retries < _MAX_RETRIES:
+        if tries < _MAX_LAMBDA_TRIES:
             # Exponential delay:
-            max_sleep_time = 2.0 ** retries / 100.0  # start with 20 ms delay
-            time.sleep(random.uniform(0, max_sleep_time))
+            max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
+            sleep_time = random.uniform(0, max_sleep_time)
 
-    if retries < _MAX_RETRIES:
+            logger.info('Retrying after {} seconds.'.format(sleep_time))
+
+            time.sleep(sleep_time)
+
+    if tries < _MAX_LAMBDA_TRIES:
         return json.loads(response['Payload'].read())
     else:
         # Give up a few people after maximum number of retires:
-        logger.info('Giving up after {} retires.'.format(_MAX_RETRIES))
+        logger.info('Giving up after {} tries.'.format(_MAX_LAMBDA_TRIES))
         return []
 
 
