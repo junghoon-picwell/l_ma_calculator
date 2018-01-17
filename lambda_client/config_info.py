@@ -20,6 +20,8 @@ class ConfigInfo(object):
         'use_s3_for_benefits',
         'all_states',
         'log_level',
+        'max_calculated_uids',
+        'max_lambda_calls',
     )
 
     def __init__(self, config_file_name):
@@ -45,4 +47,7 @@ class ConfigInfo(object):
                            config_parser.get('benefits', 'ALL_STATES').split(',')]
 
         self.log_level = config_parser.get('general', 'LOG_LEVEL')
+
+        self.max_calculated_uids = int(config_parser.get('general', 'MAX_CALCULATED_UIDS'))
+        self.max_lambda_calls = int(config_parser.get('general', 'MAX_LAMBDA_CALLS'))
 

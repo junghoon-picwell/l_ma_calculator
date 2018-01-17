@@ -17,10 +17,6 @@ from shared_utils import (
 _MAX_CLIENT_TRIES = 10
 _MAX_LAMBDA_TRIES = 7
 
-# Both should be less than MAX_THREADS used for ThreadPool:
-_MAX_CALCULATED_UIDS = min(1, MAX_THREADS)
-_MAX_LAMBDA_CALLS = min(10, MAX_THREADS)
-
 logger = logging.getLogger()
 
 
@@ -119,7 +115,8 @@ def _call_itself(uids, run_options):
         return []
 
 
-def run_interactive(claims_client, benefits_client, claim_year, run_options, oop_only):
+def run_interactive(claims_client, benefits_client, claim_year, run_options,
+                    max_calculated_uids, max_lambda_calls, oop_only):
     """
     The run_options looks like
     {
@@ -138,11 +135,8 @@ def run_interactive(claims_client, benefits_client, claim_year, run_options, oop
         raise Exception('Missing "pids".')
     pids = run_options['pids']
 
-    max_calculated_uids = run_options.get('max_calculated_uids', _MAX_CALCULATED_UIDS)
     if len(uids) > max_calculated_uids:
-        max_lambda_calls = run_options.get('max_lambda_calls', _MAX_LAMBDA_CALLS)
         uid_groups = _distribute_uids(uids, max_calculated_uids, max_lambda_calls)
-
         logger.info('{} uids are broken into {} groups'.format(len(uids), len(uid_groups)))
 
         # TODO: improve error handling with Threading since threads can fail as we have seen above.

@@ -58,6 +58,14 @@ def _run_calculator(run_options, aws_options):
         else:
             benefits_client = DummyBenefitsClient()
 
+        # Options used in multiple services:
+        #
+        # .pop() should not be used for possible recursive calls.
+        max_calculated_uids = int(run_options.get('max_calculated_uids',
+                                                  configs.max_calculated_uids))
+        max_lambda_calls = int(run_options.get('max_lambda_calls',
+                                               configs.max_lambda_calls))
+
         service = run_options['service']
         if service == 'batch':
             uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
@@ -67,11 +75,13 @@ def _run_calculator(run_options, aws_options):
 
         elif service == 'breakdown':
             return run_interactive(claims_client, benefits_client, configs.claims_year,
-                                   run_options, oop_only=False)
+                                   run_options, max_calculated_uids, max_lambda_calls,
+                                   oop_only=False)
 
         elif service == 'oop':
             return run_interactive(claims_client, benefits_client, configs.claims_year,
-                                   run_options, oop_only=True)
+                                   run_options, max_calculated_uids, max_lambda_calls,
+                                   oop_only=True)
 
         else:
             # Since Lambdas are directly called, instead of through the API gateway,
@@ -152,6 +162,7 @@ if __name__ == '__main__':
         'uids': ['1302895801', '3132439001', '2294063501', '1280937802', '31812914701'],
         'pids': ['2820028008119', '2820088001036'],
         'month': '01',
+        'max_calculated_uids': 5,
     }
 
     print('BREAKDOWN RUN')
