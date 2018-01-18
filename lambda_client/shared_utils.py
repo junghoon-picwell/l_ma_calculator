@@ -9,6 +9,7 @@ import json
 import multiprocessing
 import os
 import Queue
+import random
 import threading
 import time
 
@@ -17,8 +18,15 @@ from config_info import (
     ConfigInfo,
 )
 
+# This limit is set by AWS:
+#
+# See BatchGetItem in https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html.
+_BATCH_READ_SIZE = 100
+
 # This limits opening too many files:
-MAX_THREADS = 100
+_MAX_THREADS = 100
+
+_MAX_DYNAMODB_TRIES = 7
 
 logger = logging.getLogger()
 # logger = None
@@ -65,6 +73,31 @@ class TimeLogger(object):
             self._logger.info(self._end_message.format(time=time, elapsed=self.elapsed))
 
 
+# TODO: can I improve RandomSeedSetter in misscleo to do this as well?
+class RandomStateProtector(object):
+    """
+    Ensure that a part of the code that needs to be truly random does not affect the
+    pseudorandom behavior of the rest of the code.
+    """
+    __slots__ = (
+        '_set_seed',
+        '_random_state',
+    )
+
+    def __init__(self, set_seed=False):
+        self._set_seed = set_seed
+
+    def __enter__(self):
+        self._random_state = random.getstate()
+        if self._set_seed:
+            random.seed()  # randomly set seed
+
+        return self._random_state
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        random.setstate(self._random_state)
+
+
 class ThreadPool(object):
     """
     Alternative implementation of multiprocessing.pool.ThreadPool for AWS Lambda. We
@@ -109,7 +142,7 @@ class ThreadPool(object):
 
         # Combine all the results:
         with TimeLogger(logger,
-                        end_message='Combining all results took {elapsed} seconds.'):
+                        end_message='Combining all results in order took {elapsed} seconds.'):
             pairs = []  # (index, return value) pairs
             while not queue.empty():
                 pairs.append(queue.get())
@@ -136,8 +169,140 @@ def _read_json(s3_bucket, s3_path, resource):
     return [json.loads(l) for l in lines_from_s3.splitlines()]
 
 
+# The following two functions are very similar to what is in misscleo:
+def _read_batch_from_dynamodb(keys, table_name, aws_info):
+    """
+    Make one batch read request to a DynamoDB table.
+
+    The keys need to be unique. The order of returned items and unprocessed keys can
+    be different from the order of the keys given.
+
+    :param keys: a sequence of dictionaries, where each dictionary is a unique key.
+    :param table_name: name of the DynamoDB table.
+    :param aws_info: information to create a session. {} can be used.
+    :return: {
+                 'items': list of items returned by DynamoDB.
+                 'unprocessed_keys': list of keys not processed.
+             }
+    """
+    session = boto3.Session(**aws_info)
+    resource = session.resource('dynamodb')
+
+    # Guard agaist error due to throttling:
+    try:
+        # Only use keys within the maximum batch size. The rest is returned as unprocessed.
+        response = resource.batch_get_item(
+            RequestItems={
+                table_name: {
+                    'Keys': keys[:_BATCH_READ_SIZE],
+                    'ConsistentRead': False,  # eventually consistent reads
+                },
+            },
+            ReturnConsumedCapacity='TOTAL',
+        )
+
+        # Keys that do not exist in the table will be ignored by DynamoDB:
+        items = response['Responses'].get(table_name, [])
+        unprocessed_keys = (response['UnprocessedKeys'].get(table_name, {})
+                                                       .get('Keys', []))
+
+    except Exception as e:
+        logging.info(e.message)
+        items = None  # indicate that an error occurred
+        unprocessed_keys = keys[:_BATCH_READ_SIZE]
+
+    return {
+        'items': items,
+        'unprocessed_keys': keys[_BATCH_READ_SIZE:] + unprocessed_keys,
+    }
+
+
+def _read_from_dynamodb(keys, table_name, aws_info):
+    """
+    Read from a DynamoDB table.
+
+    The keys need to be unique. The order of returned items and unprocessed keys can
+    be different from the order of the keys given. Finally, the number of items
+    returned can be fewer than the number of keys if some keys do not exist in the
+    table.
+
+    :param keys: a sequence of dictionaries, where each dictionary is a unique key.
+    :param table_name: name of the DynamoDB table.
+    :param aws_info: information to create a session. {} can be used.
+    :return: {
+                 'items': list of items returned by DynamoDB.
+                 'unprocessed_keys': list of keys not processed.
+             }
+    """
+    # Maximum number of keys that can be processed within a single iteration:
+    max_keys = _BATCH_READ_SIZE*_MAX_THREADS
+
+    tries = 0
+    items = []
+    unprocessed_keys = keys
+
+    with RandomStateProtector():
+        while unprocessed_keys:
+            # Break the keys into batches:
+            num_keys_to_process = min(len(unprocessed_keys), max_keys)
+            key_batches = (unprocessed_keys[start:(start + _BATCH_READ_SIZE)]
+                           for start in xrange(0, num_keys_to_process, _BATCH_READ_SIZE))
+
+            # TODO: I don't know why imap() does not work. Furthermore, should use imap_unordered()?
+            pool = ThreadPool(_MAX_THREADS)
+            responses = pool.map(
+                lambda ks: _read_batch_from_dynamodb(ks, table_name, aws_info),
+                key_batches,
+            )
+
+            is_error = False
+            unprocessed_keys = unprocessed_keys[num_keys_to_process:]
+            for response in responses:
+                if response['items'] is None:
+                    is_error = True
+                else:
+                    items += response['items']
+                unprocessed_keys += response['unprocessed_keys']
+
+            if is_error:
+                tries += 1
+                if tries > _MAX_DYNAMODB_TRIES:
+                    raise Exception('Giving up after {} tries'.format(_MAX_DYNAMODB_TRIES))
+
+                # Exponential delay algorithm:
+                max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
+                sleep_time = random.uniform(0, max_sleep_time)
+
+                time.sleep(sleep_time)
+
+                logger.info('Retrying after {} seconds.'.format(sleep_time))
+
+            else:
+                tries = 0
+
+    return items
+
+
 class ClaimsClient(object):
     __slots__ = ('_aws_info', '_s3_bucket', '_s3_path', '_table_name')
+
+    @staticmethod
+    def format_claim(claim):
+        return {
+            'admitted': str(claim['admitted']),
+            'discharged': str(claim['discharged']),
+            'benefit_category': int(claim['benefit_category']),
+            'length_of_stay': int(claim['length_of_stay']),
+            'cost': float(claim['cost']),
+        }
+
+    @staticmethod
+    def format_person(person):
+        return {
+            'uid': str(person['uid']),
+            'medical_claims': [ClaimsClient.format_claim(claim)
+                               for claim in person['medical_claims']],
+        }
 
     def __init__(self, aws_info=None,
                  s3_bucket=None, s3_path=None,
@@ -176,7 +341,7 @@ class ClaimsClient(object):
         # AWS credentials should not be stored.
         raise Exception('ClaimsClient object cannot be pickled.')
 
-    def _get_from_s3(self, uid):
+    def _get_one_from_s3(self, uid):
         session = boto3.Session(**self._aws_info)
         resource = session.resource('s3')
 
@@ -189,29 +354,29 @@ class ClaimsClient(object):
 
         return claims_list[0]
 
-    def _get_from_dynamodb(self, uid):
-        session = boto3.Session(**self._aws_info)
-        resource = session.resource('dynamodb')
-        table = resource.Table(self._table_name)
+    def _get_from_s3(self, uids):
+        pool = ThreadPool(processes=_MAX_THREADS)
+        return pool.map(lambda uid: self._get_one_from_s3(uid), uids)
 
-        response = table.get_item(Key={'uid': uid},
-                                  ConsistentRead=False)
-        if 'Item' not in response or not response['Item']:  # not sure exactly what happens
-            message = 'No user data located in {} table'.format(self._table_name)
-            raise Exception(message)
+    def _get_from_dynamodb(self, uids):
+        # Only read unique UIDs
+        keys = [{'uid': uid} for uid in set(uids)]
+        people = _read_from_dynamodb(keys, self._table_name, self._aws_info)
 
-        return response['Item']
+        # For faster lookup:
+        people_dict = {person['uid']: person for person in people}
+        return [people_dict[uid] for uid in uids]
 
     def get(self, uids):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=MAX_THREADS)
-
         if self.use_s3:
-            return pool.map(lambda uid: self._get_from_s3(uid), uids)
+            people = self._get_from_s3(uids)
         else:
-            return pool.map(lambda uid: self._get_from_dynamodb(uid), uids)
+            people = self._get_from_dynamodb(uids)
+
+        return [ClaimsClient.format_person(person) for person in people]
 
 
 class BenefitsClient(object):
@@ -257,7 +422,7 @@ class BenefitsClient(object):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=MAX_THREADS)
+        pool = ThreadPool(processes=_MAX_THREADS)
 
         # Each call can return plans:
         plans = pool.imap(lambda state: self._get_one_state(state), states)

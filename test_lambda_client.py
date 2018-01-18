@@ -107,6 +107,13 @@ print person.keys()
 
 # In[10]:
 
+# Let's try something larger:
+people = client.get(uids)
+print 'claims of {} people retrieved'.format(len(people))
+
+
+# In[11]:
+
 # Test DynamoDB:
 client = ClaimsClient(aws_info,
                       table_name=configs.claims_table)
@@ -115,7 +122,24 @@ people = client.get(uids[:1])
 print 'claims of {} people retrieved'.format(len(people))
 
 
-# In[11]:
+# In[12]:
+
+person = people[0]
+print person.keys()
+{
+    'uid': person['uid'],
+    'medical_claims': person['medical_claims'][:5]
+}
+
+
+# In[13]:
+
+# Let's try something larger:
+people = client.get(uids)
+print 'claims of {} people retrieved'.format(len(people))
+
+
+# In[14]:
 
 # Test configuration file and retrieving multiple people:
 client = ClaimsClient(aws_info)
@@ -124,14 +148,7 @@ people = client.get(uids[:5])
 print 'claims of {} people retrieved'.format(len(people))
 
 
-# In[12]:
-
-# Let's try something larger:
-people = client.get(uids)
-print 'claims of {} people retrieved'.format(len(people))
-
-
-# In[13]:
+# In[15]:
 
 # The object should not be pickled.
 with pytest.raises(Exception, match='ClaimsClient object cannot be pickled.'):
@@ -140,14 +157,14 @@ with pytest.raises(Exception, match='ClaimsClient object cannot be pickled.'):
 
 # # Test BenefitsClient
 
-# In[14]:
+# In[16]:
 
 client = BenefitsClient(aws_info)
 
 print client.all_states
 
 
-# In[15]:
+# In[17]:
 
 plans = client._get_one_state('01')
 print '{} plans read for state 01'.format(len(plans))
@@ -156,19 +173,19 @@ plans = client._get_one_state('04')
 print '{} plans read for state 04'.format(len(plans))
 
 
-# In[16]:
+# In[18]:
 
 plans = client.get_by_state(['01', '04'])
 print '{} plans read'.format(len(plans))
 
 
-# In[17]:
+# In[19]:
 
 plans = client.get_all()
 print '{} plans read'.format(len(plans))
 
 
-# In[18]:
+# In[20]:
 
 # Compare the timing against reading the entire file:
 from lambda_client.shared_utils import _read_json
@@ -177,21 +194,21 @@ session = boto3.Session(**aws_info)
 resource = session.resource('s3')
 
 
-# In[19]:
+# In[21]:
 
 all_plans = _read_json('picwell.sandbox.medicare', 'ma_benefits/cms_2018_pbps_20171005.json', resource)
 
 print '{} plans read'.format(len(plans))
 
 
-# In[20]:
+# In[22]:
 
 # Ensure that the same plans are read:
 sort_key = lambda plan: plan['picwell_id']
 assert sorted(all_plans, key=sort_key) == sorted(plans, key=sort_key)
 
 
-# In[21]:
+# In[23]:
 
 # The object should not be pickled.
 with pytest.raises(Exception, match='BenefitsClient object cannot be pickled.'):
@@ -200,12 +217,12 @@ with pytest.raises(Exception, match='BenefitsClient object cannot be pickled.'):
 
 # # Test Cost Breakdown
 
-# In[22]:
+# In[24]:
 
 client = CalculatorClient(aws_info)
 
 
-# In[23]:
+# In[25]:
 
 responses = client.get_breakdown(uids[:1], pids, verbose=True)
 
@@ -213,7 +230,7 @@ print '{} responses returned'.format(len(responses))
 responses[0]
 
 
-# In[24]:
+# In[26]:
 
 # Test recursive call:
 responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
@@ -221,21 +238,21 @@ responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
 print '{} responses returned'.format(len(responses))
 
 
-# In[25]:
+# In[27]:
 
 responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[26]:
+# In[28]:
 
 responses = client.get_breakdown(uids[:10], pids)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[27]:
+# In[29]:
 
 # Let's try something larger:
 responses = client.get_breakdown(uids, pids)
@@ -243,12 +260,16 @@ responses = client.get_breakdown(uids, pids)
 print '{} responses returned'.format(len(responses))
 
 
-# In[28]:
+# In[30]:
 
 # Run calculcations locally for comparison:
 from lambda_package.calc.calculator import calculate_oop
 
-claims_client = ClaimsClient(aws_info)
+# claims_client = ClaimsClient(aws_info, 
+#                              s3_bucket=configs.claims_bucket,
+#                              s3_path=configs.claims_path)
+claims_client = ClaimsClient(aws_info, 
+                             table_name=configs.claims_table)
 people = claims_client.get(uids)
 
 benefits_client = BenefitsClient(aws_info)
@@ -259,6 +280,7 @@ for person in people:
     claims = person['medical_claims']
     
     for plan in plans:
+        
         cost = calculate_oop(claims, plan)
         cost.update({
             'uid': person['uid'],
@@ -270,7 +292,7 @@ for person in people:
 print '{} costs calculated'.format(len(costs))
 
 
-# In[29]:
+# In[31]:
 
 # benefits_client = BenefitsClient()
 benefits_client = BenefitsClient(aws_info)
@@ -280,7 +302,7 @@ pids_CA = [plan['picwell_id'] for plan in plans_CA]
 print '{} plans identified'.format(len(pids_CA))
 
 
-# In[30]:
+# In[32]:
 
 # Try a sample size more relevant to commercial:
 responses = client.get_oop(uids[:300], pids_CA)
@@ -290,19 +312,19 @@ print '{} responses returned'.format(len(responses))
 
 # # Test Batch Calculation
 
-# In[31]:
+# In[33]:
 
 # uids = s3.read_json('s3n://picwell.sandbox.medicare/samples/philadelphia-2015')
 
 # print '{} uids read'.format(len(uids))
 
 
-# In[32]:
+# In[34]:
 
 # uids[:10]
 
 
-# In[33]:
+# In[35]:
 
 # requests_per_second = 100
 

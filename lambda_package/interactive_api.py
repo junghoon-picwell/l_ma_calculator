@@ -12,6 +12,7 @@ from shared_utils import (
     MAX_THREADS,
     ThreadPool,
     TimeLogger,
+    RandomStateProtector,
 )
 
 _MAX_CLIENT_TRIES = 10
@@ -83,29 +84,30 @@ def _call_itself(uids, run_options):
     request['queryStringParameters']['uids'] = uids
     encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
-    tries = 0
-    while tries < _MAX_LAMBDA_TRIES:
-        response = client.invoke(
-            FunctionName='ma_calculator',
-            InvocationType='RequestResponse',
-            LogType='None',
-            Payload=encoded_payload,
-        )
+    with RandomStateProtector():
+        tries = 0
+        while tries < _MAX_LAMBDA_TRIES:
+            response = client.invoke(
+                FunctionName='ma_calculator',
+                InvocationType='RequestResponse',
+                LogType='None',
+                Payload=encoded_payload,
+            )
 
-        if response['StatusCode'] == 200 and 'FunctionError' not in response:
-            break
+            if response['StatusCode'] == 200 and 'FunctionError' not in response:
+                break
 
-        tries += 1
+            tries += 1
 
-        # No delay is needed for the last iteration:
-        if tries < _MAX_LAMBDA_TRIES:
-            # Exponential delay:
-            max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
-            sleep_time = random.uniform(0, max_sleep_time)
+            # No delay is needed for the last iteration:
+            if tries < _MAX_LAMBDA_TRIES:
+                # Exponential delay:
+                max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
+                sleep_time = random.uniform(0, max_sleep_time)
 
-            logger.info('Retrying after {} seconds.'.format(sleep_time))
+                logger.info('Retrying after {} seconds.'.format(sleep_time))
 
-            time.sleep(sleep_time)
+                time.sleep(sleep_time)
 
     if tries < _MAX_LAMBDA_TRIES:
         return json.loads(response['Payload'].read())
