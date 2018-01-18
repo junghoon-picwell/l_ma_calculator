@@ -24,7 +24,7 @@ from config_info import (
 _BATCH_READ_SIZE = 100
 
 # This limits opening too many files:
-_MAX_THREADS = 100
+MAX_THREADS = 100
 
 _MAX_DYNAMODB_TRIES = 7
 
@@ -235,7 +235,7 @@ def _read_from_dynamodb(keys, table_name, aws_info):
              }
     """
     # Maximum number of keys that can be processed within a single iteration:
-    max_keys = _BATCH_READ_SIZE*_MAX_THREADS
+    max_keys = _BATCH_READ_SIZE * MAX_THREADS
 
     tries = 0
     items = []
@@ -249,7 +249,7 @@ def _read_from_dynamodb(keys, table_name, aws_info):
                            for start in xrange(0, num_keys_to_process, _BATCH_READ_SIZE))
 
             # TODO: I don't know why imap() does not work. Furthermore, should use imap_unordered()?
-            pool = ThreadPool(_MAX_THREADS)
+            pool = ThreadPool(MAX_THREADS)
             responses = pool.map(
                 lambda ks: _read_batch_from_dynamodb(ks, table_name, aws_info),
                 key_batches,
@@ -355,7 +355,7 @@ class ClaimsClient(object):
         return claims_list[0]
 
     def _get_from_s3(self, uids):
-        pool = ThreadPool(processes=_MAX_THREADS)
+        pool = ThreadPool(processes=MAX_THREADS)
         return pool.map(lambda uid: self._get_one_from_s3(uid), uids)
 
     def _get_from_dynamodb(self, uids):
@@ -422,7 +422,7 @@ class BenefitsClient(object):
         # Issue a thread for each state because this is IO bound:
         #
         # Processes cannot be used because the object cannot be pickled for security reasons.
-        pool = ThreadPool(processes=_MAX_THREADS)
+        pool = ThreadPool(processes=MAX_THREADS)
 
         # Each call can return plans:
         plans = pool.imap(lambda state: self._get_one_state(state), states)

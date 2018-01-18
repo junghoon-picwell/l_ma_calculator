@@ -50,7 +50,14 @@ def _run_calculator(run_options, aws_options):
                     start_message='Clock started at {time}.',
                     end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)') as tl:
         # Setup clients to load claims and benefits:
-        claims_client = ClaimsClient(aws_options)
+        use_s3_for_claims = run_options.get('use_s3_for_claims', configs.use_s3_for_claims)
+        if use_s3_for_claims:
+            claims_client = ClaimsClient(aws_options,
+                                         s3_bucket=configs.claims_bucket,
+                                         s3_path=configs.claims_path)
+        else:
+            claims_client = ClaimsClient(aws_options,
+                                         table_name=configs.claims_table)
 
         if configs.use_s3_for_benefits:
             benefits_client = BenefitsClient(aws_options)
@@ -162,6 +169,7 @@ if __name__ == '__main__':
         'uids': ['1302895801', '3132439001', '2294063501', '1280937802', '31812914701'],
         'pids': ['2820028008119', '2820088001036'],
         'month': '01',
+        'use_s3_for_claims': False,
         'max_calculated_uids': 5,
     }
 

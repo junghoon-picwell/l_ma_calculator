@@ -232,27 +232,42 @@ responses[0]
 
 # In[26]:
 
-# Test recursive call:
-responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
+responses = client.get_breakdown(uids[:1], pids, use_s3_for_claims=False, verbose=True)
 
 print '{} responses returned'.format(len(responses))
 
 
 # In[27]:
 
-responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2)
+# Test recursive call:
+responses = client.get_breakdown(uids[:10], pids, max_calculated_uids=10)
 
 print '{} responses returned'.format(len(responses))
 
 
 # In[28]:
 
-responses = client.get_breakdown(uids[:10], pids)
+responses = client.get_breakdown(uids[:10], pids, max_lambda_calls=2)
 
 print '{} responses returned'.format(len(responses))
 
 
 # In[29]:
+
+responses = client.get_breakdown(uids[:10], pids)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[30]:
+
+# Check whether DynamoDB reduces latency:
+responses = client.get_breakdown(uids[:10], pids, use_s3_for_claims=False, max_calculated_uids=10)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[31]:
 
 # Let's try something larger:
 responses = client.get_breakdown(uids, pids)
@@ -260,11 +275,52 @@ responses = client.get_breakdown(uids, pids)
 print '{} responses returned'.format(len(responses))
 
 
-# In[30]:
+# In[32]:
 
-# Run calculcations locally for comparison:
+responses = client.get_breakdown(uids, pids, use_s3_for_claims=False)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[33]:
+
+# Runs into memory issue if all 1000 people are calculated once:
+responses = client.get_breakdown(uids, pids, use_s3_for_claims=False, max_calculated_uids=100, max_lambda_calls=10)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[45]:
+
 from lambda_package.calc.calculator import calculate_oop
 
+def run_locally(people, plans, oop_only):
+    costs = []
+    
+    for person in people:
+        claims = person['medical_claims']
+    
+        for plan in plans:
+
+            cost = calculate_oop(claims, plan)
+            if oop_only:
+                cost = {
+                    'oop': cost['oop']
+                }
+
+            cost.update({
+                'uid': person['uid'],
+                'picwell_id': str(plan['picwell_id']),
+            })
+
+            costs.append(cost)
+    
+    return costs
+
+
+# In[46]:
+
+# Run calculcations locally for comparison:
 # claims_client = ClaimsClient(aws_info, 
 #                              s3_bucket=configs.claims_bucket,
 #                              s3_path=configs.claims_path)
@@ -275,24 +331,12 @@ people = claims_client.get(uids)
 benefits_client = BenefitsClient(aws_info)
 plans = benefits_client.get_by_pid(pids)
 
-costs = []
-for person in people:
-    claims = person['medical_claims']
-    
-    for plan in plans:
-        
-        cost = calculate_oop(claims, plan)
-        cost.update({
-            'uid': person['uid'],
-            'picwell_id': str(plan['picwell_id']),
-        })
-        
-        costs.append(cost)
-        
+costs = run_locally(people, plans, False)
+
 print '{} costs calculated'.format(len(costs))
 
 
-# In[31]:
+# In[35]:
 
 # benefits_client = BenefitsClient()
 benefits_client = BenefitsClient(aws_info)
@@ -302,7 +346,7 @@ pids_CA = [plan['picwell_id'] for plan in plans_CA]
 print '{} plans identified'.format(len(pids_CA))
 
 
-# In[32]:
+# In[36]:
 
 # Try a sample size more relevant to commercial:
 responses = client.get_oop(uids[:300], pids_CA)
@@ -310,21 +354,51 @@ responses = client.get_oop(uids[:300], pids_CA)
 print '{} responses returned'.format(len(responses))
 
 
+# In[37]:
+
+responses = client.get_oop(uids[:300], pids_CA, use_s3_for_claims=False)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[42]:
+
+# Increasing the amount of computation at the terminal nodes increases the time. This is probably
+# because there are many plans.
+responses = client.get_oop(uids[:300], pids_CA, use_s3_for_claims=False, max_calculated_uids=3)
+
+print '{} responses returned'.format(len(responses))
+
+
+# In[47]:
+
+claims_client = ClaimsClient(aws_info, 
+                             table_name=configs.claims_table)
+people = claims_client.get(uids[:300])
+
+benefits_client = BenefitsClient(aws_info)
+plans = benefits_client.get_by_pid(pids_CA)
+
+costs = run_locally(people, plans, True)
+
+print '{} costs calculated'.format(len(costs))
+
+
 # # Test Batch Calculation
 
-# In[33]:
+# In[39]:
 
 # uids = s3.read_json('s3n://picwell.sandbox.medicare/samples/philadelphia-2015')
 
 # print '{} uids read'.format(len(uids))
 
 
-# In[34]:
+# In[40]:
 
 # uids[:10]
 
 
-# In[35]:
+# In[41]:
 
 # requests_per_second = 100
 
