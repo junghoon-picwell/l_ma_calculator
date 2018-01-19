@@ -10,9 +10,6 @@ from .shared_utils import ThreadPool
 
 _MAX_THREADS = 100  # prevent opening too many files
 
-from .invocation_types import InvocationType
-
-
 logger = logging.getLogger()
 
 
@@ -24,18 +21,8 @@ class CalculatorClient(object):
     def __getstate__(self):
         raise Exception('CalculatorClient object cannot be pickled')
 
-    def _issue_interactive_request(self, service, uids, pids, month,
-                                   use_s3_for_claims,
-                                   max_calculated_uids, max_lambda_calls, verbose):
-        request = {
-            'httpMethod': 'GET',
-            'queryStringParameters': {
-                'service': service,
-                'uids': uids,
-                'pids': pids,
-                'month': month,
-            }
-        }
+    def _issue_request(self, request, use_s3_for_claims,
+                       max_calculated_uids, max_lambda_calls, verbose):
         if use_s3_for_claims is not None:
             request['queryStringParameters']['use_s3_for_claims'] = use_s3_for_claims
         if max_calculated_uids is not None:
@@ -51,7 +38,7 @@ class CalculatorClient(object):
         encoded_payload = bytes(json.dumps(request)).encode('utf-8')
         response = client.invoke(
             FunctionName='ma_calculator',
-            InvocationType=InvocationType.RequestResponse,
+            InvocationType='RequestResponse',
             LogType='Tail' if verbose else 'None',
             Payload=encoded_payload,
         )
@@ -75,14 +62,51 @@ class CalculatorClient(object):
                       use_s3_for_claims=None,
                       max_calculated_uids=None, max_lambda_calls=None,
                       verbose=False):
-        return self._issue_interactive_request('breakdown', uids, pids, month,
-                                               use_s3_for_claims,
-                                               max_calculated_uids, max_lambda_calls, verbose)
+        request = {
+            'httpMethod': 'GET',
+            'queryStringParameters': {
+                'service': 'breakdown',
+                'uids': uids,
+                'pids': pids,
+                'month': month,
+            }
+        }
+
+        return self._issue_request(request, use_s3_for_claims,
+                                   max_calculated_uids, max_lambda_calls, verbose)
 
     def get_oop(self, uids, pids, month='01',
                 use_s3_for_claims=None,
                 max_calculated_uids=None, max_lambda_calls=None,
                 verbose=False):
-        return self._issue_interactive_request('oop', uids, pids, month,
-                                               use_s3_for_claims,
-                                               max_calculated_uids, max_lambda_calls, verbose)
+        request = {
+            'httpMethod': 'GET',
+            'queryStringParameters': {
+                'service': 'oop',
+                'uids': uids,
+                'pids': pids,
+                'month': month,
+            }
+        }
+
+        return self._issue_request(request, use_s3_for_claims,
+                                   max_calculated_uids, max_lambda_calls, verbose)
+
+    def run_batch(self, uids, states=None, months=None,
+                  use_s3_for_claims=None,
+                  max_calculated_uids=None, max_lambda_calls=None,
+                  verbose=False):
+        request = {
+            'httpMethod': 'GET',
+            'queryStringParameters': {
+                'service': 'batch',
+                'uids': uids,
+            }
+        }
+        if states is not None:
+            request['queryStringParameters']['states'] = states
+        if months is not None:
+            request['queryStringParameters']['months'] = months
+
+        return self._issue_request(request, use_s3_for_claims,
+                                   max_calculated_uids, max_lambda_calls, verbose)
