@@ -23,7 +23,9 @@ from lambda_client import (
     ClaimsClient,
     BenefitsClient,
     CalculatorClient,
+    run_batch_on_schedule,
 )
+from lambda_client.config_info import ConfigInfo
 
 reload(logging)  # get around notebook problem
 
@@ -60,8 +62,6 @@ pids = ['2820028008119', '2820088001036']
 # # Test ConfigInfo
 
 # In[6]:
-
-from lambda_client.config_info import ConfigInfo
 
 configs = ConfigInfo('lambda_client/lambda.cfg')
 
@@ -290,7 +290,7 @@ responses = client.get_breakdown(uids, pids, use_s3_for_claims=False, max_calcul
 print '{} responses returned'.format(len(responses))
 
 
-# In[45]:
+# In[34]:
 
 from lambda_package.calc.calculator import calculate_oop
 
@@ -318,7 +318,7 @@ def run_locally(people, plans, oop_only):
     return costs
 
 
-# In[46]:
+# In[35]:
 
 # Run calculcations locally for comparison:
 # claims_client = ClaimsClient(aws_info, 
@@ -336,7 +336,7 @@ costs = run_locally(people, plans, False)
 print '{} costs calculated'.format(len(costs))
 
 
-# In[35]:
+# In[36]:
 
 # benefits_client = BenefitsClient()
 benefits_client = BenefitsClient(aws_info)
@@ -346,7 +346,7 @@ pids_CA = [plan['picwell_id'] for plan in plans_CA]
 print '{} plans identified'.format(len(pids_CA))
 
 
-# In[36]:
+# In[37]:
 
 # Try a sample size more relevant to commercial:
 responses = client.get_oop(uids[:300], pids_CA)
@@ -354,14 +354,14 @@ responses = client.get_oop(uids[:300], pids_CA)
 print '{} responses returned'.format(len(responses))
 
 
-# In[37]:
+# In[38]:
 
 responses = client.get_oop(uids[:300], pids_CA, use_s3_for_claims=False)
 
 print '{} responses returned'.format(len(responses))
 
 
-# In[42]:
+# In[39]:
 
 # Increasing the amount of computation at the terminal nodes increases the time. This is probably
 # because there are many plans.
@@ -370,7 +370,7 @@ responses = client.get_oop(uids[:300], pids_CA, use_s3_for_claims=False, max_cal
 print '{} responses returned'.format(len(responses))
 
 
-# In[47]:
+# In[40]:
 
 claims_client = ClaimsClient(aws_info, 
                              table_name=configs.claims_table)
@@ -386,26 +386,75 @@ print '{} costs calculated'.format(len(costs))
 
 # # Test Batch Calculation
 
-# In[39]:
-
-# uids = s3.read_json('s3n://picwell.sandbox.medicare/samples/philadelphia-2015')
-
-# print '{} uids read'.format(len(uids))
-
-
-# In[40]:
-
-# uids[:10]
-
-
 # In[41]:
 
-# requests_per_second = 100
+uids = s3.read_json('s3n://picwell.sandbox.medicare/samples/philadelphia-2015')
 
-# for uid in uids:
-# #     client.calculate_async(uid, months=['01'])
-#     client.calculate_async(uid)
-#     time.sleep(1.0/requests_per_second)  
+print '{} uids read'.format(len(uids))
+
+
+# In[42]:
+
+configs = ConfigInfo('lambda_client/lambda.cfg')
+all_states = configs.all_states
+
+print '{} states'.format(len(all_states))
+
+
+# In[43]:
+
+client = CalculatorClient(aws_info)
+
+
+# In[44]:
+
+response = client.run_batch(uids[:1], months=['01', '02', '03'], states=['01', '06'], verbose=True)
+
+print response
+
+
+# In[45]:
+
+response = client.run_batch(uids[:2], states=['01', '06', '36'], max_calculated_uids=2)
+
+print response
+
+
+# In[46]:
+
+# Test recursive call:
+response = client.run_batch(uids[:2], states=['01', '06', '36'])
+
+print response
+
+
+# In[47]:
+
+# This only runs for large enough Lambda, e.g. 512 MB, and fails for 256 MB Lambda. 
+# Memory determines how fast one can run.
+response = client.run_batch(uids[:20], months=['01'], states=all_states[:5])
+
+print response
+
+
+# In[48]:
+
+# Not sure why an adjustment factor is needed:
+factor = 6
+
+responses = run_batch_on_schedule(lambda uids: client.run_batch(uids, months=['01'], states=all_states[:5]),
+                                  uids[:10000], num_writes_per_uid=5, mean_runtime=30, 
+                                  min_writes=100*factor, max_writes=10000*factor, verbose=True)
+
+
+# In[49]:
+
+print 'number of responses: {}'.format(len(responses))
+
+writes = 0
+for response in responses:
+    writes += response[1]
+print 'number of writes: {}'.format(writes)
 
 
 # In[ ]:

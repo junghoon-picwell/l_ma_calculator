@@ -6,18 +6,19 @@ import logging
 import os
 
 from batch_api import run_batch
-if os.path.isfile('benefits.py'):
-    from benefits import MA_PLANS  # load benefits at load time
+from interactive_api import run_interactive
 from config_info import (
     CONFIG_FILE_NAME,
     ConfigInfo,
 )
-from interactive_api import run_interactive
 from shared_utils import (
     ClaimsClient,
     BenefitsClient,
     TimeLogger,
 )
+
+if os.path.isfile('benefits.py'):
+    from benefits import MA_PLANS  # load benefits at load time
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -48,7 +49,7 @@ def _run_calculator(run_options, aws_options):
 
     with TimeLogger(logger,
                     start_message='Clock started at {time}.',
-                    end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)') as tl:
+                    end_message='Clock stopped at {time} (elapsed: {elapsed} seconds)'):
         # Setup clients to load claims and benefits:
         use_s3_for_claims = run_options.get('use_s3_for_claims', configs.use_s3_for_claims)
         if use_s3_for_claims:
@@ -75,10 +76,9 @@ def _run_calculator(run_options, aws_options):
 
         service = run_options['service']
         if service == 'batch':
-            uid = run_batch(claims_client, benefits_client, configs.claims_year, run_options,
-                            configs.costs_table, aws_options)
-
-            return 'Batch calculation complete for {} (elapsed: {} seconds).'.format(uid, tl.elapsed)
+            return run_batch(claims_client, benefits_client, configs.claims_year,
+                             run_options, max_calculated_uids, max_lambda_calls,
+                             configs.costs_table, aws_options)
 
         elif service == 'breakdown':
             return run_interactive(claims_client, benefits_client, configs.claims_year,
@@ -154,9 +154,10 @@ if __name__ == '__main__':
 
     run_options = {
         'service': 'batch',
-        'uid': '1175404001',
-        'months': ['01'],
+        'uids': ['1175404001', '3132439001'],
+        'months': ['01', '02', '03'],
         'states': ['42', '15'],
+        'max_calculated_uids': 2,
     }
 
     print('BATCH RUN')
@@ -169,7 +170,7 @@ if __name__ == '__main__':
         'uids': ['1302895801', '3132439001', '2294063501', '1280937802', '31812914701'],
         'pids': ['2820028008119', '2820088001036'],
         'month': '01',
-        'use_s3_for_claims': False,
+        # 'use_s3_for_claims': False,
         'max_calculated_uids': 5,
     }
 
