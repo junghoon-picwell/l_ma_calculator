@@ -4,7 +4,11 @@ import logging
 import random
 import time
 
-from shared_utils import RandomStateProtector
+from lambda_package.shared_utils import (
+    RandomStateProtector,
+    MAX_THREADS,
+    ThreadPool,
+)
 
 _MAX_CLIENT_TRIES = 10
 _MAX_LAMBDA_TRIES = 7
@@ -41,7 +45,11 @@ def filter_and_sort_claims(claims, claim_year, start_month):
     return filtered_claims
 
 
-def distribute_uids(uids, max_calculated_uids, max_lambda_calls):
+def uids_need_to_be_split(uids, max_uids):
+    return len(uids) > max_uids
+
+
+def split_uids_into_groups(uids, max_calculated_uids, max_lambda_calls):
     # TODO: there may be a better way to do this:
     if len(uids) < max_calculated_uids*max_lambda_calls:
         # Try to minimize AWS Lambda calls:
@@ -53,7 +61,7 @@ def distribute_uids(uids, max_calculated_uids, max_lambda_calls):
         return [uids[start::max_lambda_calls] for start in range(max_lambda_calls)]
 
 
-def call_itself(uids, run_options):
+def call_lambda_again(uids, run_options):
     # This can fail. However, I am not sure whether I want to follow the advice in
     # this post:
     #
@@ -113,4 +121,18 @@ def call_itself(uids, run_options):
         logger.info('Giving up after {} tries.'.format(_MAX_LAMBDA_TRIES))
         return []
 
+
+def get_costs_from_lambdas(uid_groups, run_options):
+    """
+    Calls the MA Calculator lambda again, once per group in uid_groups.
+
+    :return: Sum of costs from lambda calls
+    """
+
+    with TimeLogger(logger,
+                    end_message='Distribution took {elapsed} seconds.'):
+        pool = ThreadPool(MAX_THREADS)
+        cost_groups = pool.imap(lambda uid_group: call_lambda_again(uid_group, run_options), uid_groups)
+
+    return sum(cost_groups, [])
 
