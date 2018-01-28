@@ -73,31 +73,6 @@ class TimeLogger(object):
             self._logger.info(self._end_message.format(time=time, elapsed=self.elapsed))
 
 
-# TODO: can I improve RandomSeedSetter in misscleo to do this as well?
-class RandomStateProtector(object):
-    """
-    Ensure that a part of the code that needs to be truly random does not affect the
-    pseudorandom behavior of the rest of the code.
-    """
-    __slots__ = (
-        '_set_seed',
-        '_random_state',
-    )
-
-    def __init__(self, set_seed=False):
-        self._set_seed = set_seed
-
-    def __enter__(self):
-        self._random_state = random.getstate()
-        if self._set_seed:
-            random.seed()  # randomly set seed
-
-        return self._random_state
-
-    def __exit__(self, exception_type, exception_value, traceback):
-        random.setstate(self._random_state)
-
-
 class ThreadPool(object):
     """
     Alternative implementation of multiprocessing.pool.ThreadPool for AWS Lambda. We
@@ -241,44 +216,46 @@ def _read_from_dynamodb(keys, table_name, aws_info):
     items = []
     unprocessed_keys = keys
 
-    with RandomStateProtector():
-        while unprocessed_keys:
-            # Break the keys into batches:
-            num_keys_to_process = min(len(unprocessed_keys), max_keys)
-            key_batches = (unprocessed_keys[start:(start + _BATCH_READ_SIZE)]
-                           for start in xrange(0, num_keys_to_process, _BATCH_READ_SIZE))
+    # Create a random number generator with the seed set randomly:
+    rng = random.Random()
 
-            # TODO: I don't know why imap() does not work. Furthermore, should use imap_unordered()?
-            pool = ThreadPool(MAX_THREADS)
-            responses = pool.map(
-                lambda ks: _read_batch_from_dynamodb(ks, table_name, aws_info),
-                key_batches,
-            )
+    while unprocessed_keys:
+        # Break the keys into batches:
+        num_keys_to_process = min(len(unprocessed_keys), max_keys)
+        key_batches = (unprocessed_keys[start:(start + _BATCH_READ_SIZE)]
+                       for start in xrange(0, num_keys_to_process, _BATCH_READ_SIZE))
 
-            is_error = False
-            unprocessed_keys = unprocessed_keys[num_keys_to_process:]
-            for response in responses:
-                if response['items'] is None:
-                    is_error = True
-                else:
-                    items += response['items']
-                unprocessed_keys += response['unprocessed_keys']
+        # TODO: I don't know why imap() does not work. Furthermore, should use imap_unordered()?
+        pool = ThreadPool(MAX_THREADS)
+        responses = pool.map(
+            lambda ks: _read_batch_from_dynamodb(ks, table_name, aws_info),
+            key_batches,
+        )
 
-            if is_error:
-                tries += 1
-                if tries > _MAX_DYNAMODB_TRIES:
-                    raise Exception('Giving up after {} tries'.format(_MAX_DYNAMODB_TRIES))
-
-                # Exponential delay algorithm:
-                max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
-                sleep_time = random.uniform(0, max_sleep_time)
-
-                time.sleep(sleep_time)
-
-                logger.info('Retrying after {} seconds.'.format(sleep_time))
-
+        is_error = False
+        unprocessed_keys = unprocessed_keys[num_keys_to_process:]
+        for response in responses:
+            if response['items'] is None:
+                is_error = True
             else:
-                tries = 0
+                items += response['items']
+            unprocessed_keys += response['unprocessed_keys']
+
+        if is_error:
+            tries += 1
+            if tries > _MAX_DYNAMODB_TRIES:
+                raise Exception('Giving up after {} tries'.format(_MAX_DYNAMODB_TRIES))
+
+            # Exponential delay algorithm:
+            max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
+            sleep_time = rng.uniform(0, max_sleep_time)
+
+            time.sleep(sleep_time)
+
+            logger.info('Retrying after {} seconds.'.format(sleep_time))
+
+        else:
+            tries = 0
 
     return items
 

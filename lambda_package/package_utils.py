@@ -4,8 +4,7 @@ import logging
 import random
 import time
 
-from lambda_package.shared_utils import (
-    RandomStateProtector,
+from shared_utils import (
     MAX_THREADS,
     ThreadPool,
 )
@@ -89,30 +88,32 @@ def call_lambda_again(uids, run_options):
     request['queryStringParameters']['uids'] = uids
     encoded_payload = bytes(json.dumps(request)).encode('utf-8')
 
-    with RandomStateProtector():
-        tries = 0
-        while tries < _MAX_LAMBDA_TRIES:
-            response = client.invoke(
-                FunctionName='ma_calculator',
-                InvocationType='RequestResponse',
-                LogType='None',
-                Payload=encoded_payload,
-            )
+    # Create a random number generator with the seed set randomly:
+    rng = random.Random()
 
-            if response['StatusCode'] == 200 and 'FunctionError' not in response:
-                break
+    tries = 0
+    while tries < _MAX_LAMBDA_TRIES:
+        response = client.invoke(
+            FunctionName='ma_calculator',
+            InvocationType='RequestResponse',
+            LogType='None',
+            Payload=encoded_payload,
+        )
 
-            tries += 1
+        if response['StatusCode'] == 200 and 'FunctionError' not in response:
+            break
 
-            # No delay is needed for the last iteration:
-            if tries < _MAX_LAMBDA_TRIES:
-                # Exponential delay:
-                max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
-                sleep_time = random.uniform(0, max_sleep_time)
+        tries += 1
 
-                logger.info('Retrying after {} seconds.'.format(sleep_time))
+        # No delay is needed for the last iteration:
+        if tries < _MAX_LAMBDA_TRIES:
+            # Exponential delay:
+            max_sleep_time = 2.0 ** tries / 100.0  # start with 20 ms delay
+            sleep_time = rng.uniform(0, max_sleep_time)
 
-                time.sleep(sleep_time)
+            logger.info('Retrying after {} seconds.'.format(sleep_time))
+
+            time.sleep(sleep_time)
 
     if tries < _MAX_LAMBDA_TRIES:
         return json.loads(response['Payload'].read())

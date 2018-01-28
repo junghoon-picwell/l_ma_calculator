@@ -9,7 +9,7 @@ from package_utils import (
     split_uids_into_groups,
     get_costs_from_lambdas,
 )
-from lambda_package.shared_utils import (
+from shared_utils import (
     TimeLogger,
 )
 

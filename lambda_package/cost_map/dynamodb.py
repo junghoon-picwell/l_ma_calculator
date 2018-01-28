@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from lambda_package.storage import DynamoDBStorage
+from storage import DynamoDBStorage
 from .utils import read_cost_json
 
 _BATCH_WRITE_SIZE = 25  # cannot be larger than 25
