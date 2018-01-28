@@ -44,7 +44,7 @@ def _calculate_costs(benefits_client, claims_client, run_options, uids, pids, cl
     # look up claims:
     message = 'Claim retrieval for {}'.format(uids) + ' took {elapsed} seconds.'
     with TimeLogger(logger, end_message=message):
-        # TODO: the claims need to be infalted!
+        # TODO: the claims need to be inflated!
         people = claims_client.get(uids)
 
     # look up plans from s3
