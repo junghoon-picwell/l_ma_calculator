@@ -5,6 +5,7 @@ import random
 import time
 
 from shared_utils import (
+    TimeLogger,
     MAX_THREADS,
     ThreadPool,
 )
