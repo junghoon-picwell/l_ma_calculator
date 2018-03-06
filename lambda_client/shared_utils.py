@@ -156,14 +156,15 @@ def _read_batch_from_dynamodb(keys, table_name, aws_info):
     :param table_name: name of the DynamoDB table.
     :param aws_info: information to create a session. {} can be used.
     :return: {
-                 'items': list of items returned by DynamoDB.
+                 'items': list of items returned by DynamoDB. None is returned if
+                          an error occurs.
                  'unprocessed_keys': list of keys not processed.
              }
     """
     session = boto3.Session(**aws_info)
     resource = session.resource('dynamodb')
 
-    # Guard agaist error due to throttling:
+    # Guard against error due to throttling:
     try:
         # Only use keys within the maximum batch size. The rest is returned as unprocessed.
         response = resource.batch_get_item(
